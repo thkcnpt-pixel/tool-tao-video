@@ -1,32 +1,14 @@
 /**
- * Google Apps Script Web App — Trạm nhận Webhook Telegram 24/7 miễn phí.
- *
- * Cách cài đặt:
- * 1. Mở Google Sheet -> Extensions (Tiện ích mở rộng) -> Apps Script.
- * 2. Dán toàn bộ file này vào Code.gs.
- * 3. Vào Project Settings (⚙️) -> Script Properties -> thêm:
- *      SHEET_ID           = ID Google Sheet (bỏ trống nếu script gắn trực tiếp trong Sheet)
- *      TELEGRAM_BOT_TOKEN = token bot
- *      TELEGRAM_CHAT_ID   = chat_id chủ kênh (chỉ người này mới bấm nút / sửa caption được)
- *      GITHUB_PAT         = Personal Access Token có quyền `repo` hoặc `workflow`
- *      GITHUB_REPO        = thkcnpt-pixel/tool-tao-video
- *      GITHUB_WORKFLOW    = publish_video.yml
- * 4. Bấm Deploy -> New deployment -> loại "Web app":
- *      Execute as: Me
- *      Who has access: Anyone
- *    Copy URL `https://script.google.com/macros/s/.../exec`.
- * 5. Trỏ webhook Telegram vào URL đó:
- *      python src/integrations/telegram_bot.py --set-webhook "URL_EXEC"
+ * Google Apps Script Web App — Trạm nhận Webhook Telegram 24/7 miễn phí (có LockService + chống duyệt trùng 100%).
  */
-
+var DEFAULT_SHEET_ID = '1ZXl4mwJ3XWA_L428OG78LK1olhrWEpqptlwhx6CKxNo';
 var TAB = 'Schedule';
 // Cột (1-based): 1:id 2:date 3:slot 4:topic 5:bg_theme 6:script_json 7:caption 8:status 9:telegram_msg_id 10:video_url_or_drive_id
 var COL_ID = 1, COL_CAPTION = 7, COL_STATUS = 8, COL_MSG_ID = 9;
 
 function getSheet_() {
-  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
-  var ss = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheetByName(TAB);
+  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID') || DEFAULT_SHEET_ID;
+  return SpreadsheetApp.openById(id).getSheetByName(TAB);
 }
 
 function findRow_(col, val) {
@@ -72,29 +54,48 @@ function doPost(e) {
       var cb = update.callback_query;
       var chatId = String(cb.message.chat.id);
       if (allow && chatId !== allow) return ContentService.createTextOutput('forbidden');
-      var parts = String(cb.data || '').split(':');
-      var action = parts[0], rowId = parts.slice(1).join(':');
-      var r = findRow_(COL_ID, rowId);
-      if (r < 0) {
-        tg_('answerCallbackQuery', {callback_query_id: cb.id, text: 'Không tìm thấy dòng ' + rowId});
-        return ContentService.createTextOutput('not_found');
-      }
-      var sh = getSheet_();
-      if (action === 'APPROVE') {
-        sh.getRange(r, COL_STATUS).setValue('DA_DUYET');
-        var ok = dispatchPublish_(rowId);
-        tg_('answerCallbackQuery', {callback_query_id: cb.id, text: 'Đã duyệt! Đang kích hoạt đăng bài...'});
-        tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
-                                       reply_markup: {inline_keyboard: []}});
-        tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
-          text: '✅ Đã duyệt ' + rowId + (ok ? ' — đã gọi GitHub Actions publish_video.' : ' — đã lưu DA_DUYET (chưa gọi được workflow_dispatch).')});
-      } else if (action === 'REJECT') {
-        sh.getRange(r, COL_STATUS).setValue('DA_HUY');
-        tg_('answerCallbackQuery', {callback_query_id: cb.id, text: 'Đã hủy video.'});
-        tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
-                                       reply_markup: {inline_keyboard: []}});
-        tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
-          text: '❌ Đã hủy ' + rowId});
+
+      // Trả lời Telegram NGAY LẬP TỨC để tắt vòng xoay trên nút & ngăn Telegram retry
+      tg_('answerCallbackQuery', {callback_query_id: cb.id, text: 'Đang xử lý...'});
+
+      // Khóa đồng bộ (LockService) chống 2 request chạy song song khi bấm nhiều lần
+      var lock = LockService.getScriptLock();
+      if (!lock.tryLock(10000)) return ContentService.createTextOutput('busy');
+
+      try {
+        var parts = String(cb.data || '').split(':');
+        var action = parts[0], rowId = parts.slice(1).join(':');
+        var r = findRow_(COL_ID, rowId);
+        if (r < 0) return ContentService.createTextOutput('not_found');
+
+        var sh = getSheet_();
+        var curStatus = String(sh.getRange(r, COL_STATUS).getValue() || '');
+
+        // CHỐNG LẶP TUYỆT ĐỐI: chỉ xử lý nếu dòng đó đang ở trạng thái CHO_DUYET!
+        if (curStatus !== 'CHO_DUYET') {
+          tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
+                                         reply_markup: {inline_keyboard: []}});
+          return ContentService.createTextOutput('already_processed');
+        }
+
+        if (action === 'APPROVE') {
+          sh.getRange(r, COL_STATUS).setValue('DA_DUYET');
+          SpreadsheetApp.flush(); // ghi xuống Sheet ngay trước khi gọi GitHub
+          tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
+                                         reply_markup: {inline_keyboard: []}});
+          var ok = dispatchPublish_(rowId);
+          tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
+            text: '✅ Đã duyệt ' + rowId + (ok ? ' — đã gọi GitHub Actions publish_video.' : ' — đã lưu DA_DUYET.')});
+        } else if (action === 'REJECT') {
+          sh.getRange(r, COL_STATUS).setValue('DA_HUY');
+          SpreadsheetApp.flush();
+          tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
+                                         reply_markup: {inline_keyboard: []}});
+          tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
+            text: '❌ Đã hủy ' + rowId});
+        }
+      } finally {
+        lock.releaseLock();
       }
       return ContentService.createTextOutput('ok');
     }

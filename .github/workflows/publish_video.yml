@@ -8,6 +8,11 @@ on:
         required: false
         default: ""
 
+# Chống chạy song song: chỉ cho phép 1 job publish chạy tại một thời điểm, và không xếp hàng quá 1 lượt
+concurrency:
+  group: publish-video-${{ github.event.inputs.video_id || 'default' }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest

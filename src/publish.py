@@ -1,4 +1,6 @@
-"""Pipeline đăng bài (Giai đoạn 4): kéo output.mp4 từ Drive -> YouTube Shorts (Private) + gửi bản final về Telegram."""
+"""Pipeline đăng bài (Giai đoạn 4): kéo output.mp4 từ Drive -> YouTube Shorts (Private) + gửi bản final về Telegram.
+Có khóa trạng thái DANG_DANG + concurrency lock để tuyệt đối không bao giờ đăng trùng 2 lần.
+"""
 import argparse
 import sys
 import tempfile
@@ -14,11 +16,16 @@ import youtube_uploader  # noqa: E402
 
 
 def find_target_row(sheets, video_id=None):
+    """Chỉ lấy dòng đang ở đúng trạng thái DA_DUYET (nếu đã là DANG_DANG hoặc DA_DANG thì bỏ qua ngay)."""
     rows = sheets.rows()
     if video_id:
         for r in rows:
             if r["id"] == video_id:
+                if r["status"] != "DA_DUYET":
+                    print(f"[publish] BỎ QUA {video_id}: status hiện tại là {r['status']!r} (không phải DA_DUYET)")
+                    return None
                 return r
+        return None
     approved = [r for r in rows if r["status"] == "DA_DUYET" and r["video_url_or_drive_id"]]
     return approved[0] if approved else None
 
@@ -32,12 +39,14 @@ def main():
     sheets = SheetsClient()
     row = find_target_row(sheets, a.video_id)
     if not row:
-        print(f"[publish] không tìm thấy dòng DA_DUYET nào (video_id={a.video_id!r})")
+        print(f"[publish] không có dòng DA_DUYET nào cần đăng (video_id={a.video_id!r})")
         return 0
 
     r = row["_row"]
     drive_id = row["video_url_or_drive_id"]
-    print(f"[publish] dòng {r}: id={row['id']} drive_id={drive_id}")
+    # Khóa trạng thái ngay lập tức sang DANG_DANG trước khi tải & upload YouTube để chặn mọi job chạy trùng
+    sheets.update(r, status="DANG_DANG")
+    print(f"[publish] đã khóa dòng {r} (status=DANG_DANG): id={row['id']} drive_id={drive_id}")
 
     drive = DriveClient()
     with tempfile.TemporaryDirectory() as tmp:
