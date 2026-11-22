@@ -46,6 +46,10 @@ def main():
     drive_id = row["video_url_or_drive_id"]
     # Khóa trạng thái ngay lập tức sang DANG_DANG trước khi tải & upload YouTube để chặn mọi job chạy trùng
     sheets.update(r, status="DANG_DANG")
+    try:
+        TelegramBot().clear_pending_webhook()
+    except Exception:
+        pass
     print(f"[publish] đã khóa dòng {r} (status=DANG_DANG): id={row['id']} drive_id={drive_id}")
 
     drive = DriveClient()

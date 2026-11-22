@@ -60,6 +60,17 @@ class TelegramBot:
     def webhook_info(self):
         return self._call("getWebhookInfo")
 
+    def clear_pending_webhook(self):
+        """Xóa gói tin callback_query đang bị Telegram retry lặp lại do mã 302 Found của Google Apps Script."""
+        info = self.webhook_info()
+        url = info.get("url")
+        if url:
+            self._call("setWebhook", data={
+                "url": url,
+                "drop_pending_updates": "true",
+                "allowed_updates": json.dumps(["message", "callback_query"]),
+            })
+
 
 def main():
     ap = argparse.ArgumentParser()
