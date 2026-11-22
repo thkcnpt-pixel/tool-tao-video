@@ -40,7 +40,7 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
     bg = bg_generator.generate(theme)
     voice = script.get("voice", tts_engine.DEFAULT_VOICE)
     rate = script.get("voice_rate") or tts_engine.DEFAULT_RATE
-    if rate == "+8%":
+    if rate in ("+8%", "+15%"):
         rate = tts_engine.DEFAULT_RATE
     segs = build_segments(script)
     with tempfile.TemporaryDirectory() as tmp:

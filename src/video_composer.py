@@ -63,7 +63,7 @@ def build_voice_track(seg_audios, durations, workdir):
     return voice
 
 
-def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volume=0.14, save_dir=None):
+def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volume=0.11, save_dir=None):
     total = timeline["total"]
     sfx_path = _make_sfx_track(timeline, Path(voice_path).parent)
     cmd = ["ffmpeg", "-y", "-loglevel", "error",
@@ -74,11 +74,11 @@ def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volu
     if music_path:
         cmd += ["-stream_loop", "-1", "-i", str(music_path)]
         fc = ("[0:v][1:v]overlay=0:0:format=auto,format=yuv420p[v];"
-              f"[3:a]volume=0.35[sfx];[4:a]volume={music_volume}[m];"
-              "[2:a][sfx][m]amix=inputs=3:duration=first:normalize=0[a]")
+              f"[2:a]volume=1.35[vo];[3:a]volume=0.25[sfx];[4:a]volume={music_volume}[m];"
+              "[vo][sfx][m]amix=inputs=3:duration=first:normalize=0,alimiter=limit=0.96[a]")
     else:
         fc = ("[0:v][1:v]overlay=0:0:format=auto,format=yuv420p[v];"
-              "[3:a]volume=0.35[sfx];[2:a][sfx]amix=inputs=2:duration=first:normalize=0[a]")
+              "[2:a]volume=1.35[vo];[3:a]volume=0.25[sfx];[vo][sfx]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.96[a]")
     cmd += ["-filter_complex", fc, "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}", "-r", str(FPS),
             "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(out_path)]

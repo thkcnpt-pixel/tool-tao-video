@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 DEFAULT_VOICE = "vi-VN-HoaiMyNeural"
-DEFAULT_RATE = "+15%"
+DEFAULT_RATE = "+22%"
 
 # Các từ đệm phổ biến không nên chọn làm từ khóa tĩnh
 STOPWORDS = {
@@ -54,7 +54,7 @@ def _trim_tail(path, last_word_end):
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-i", str(path),
         "-t", f"{target:.3f}",
-        "-af", "highpass=f=80,acompressor=threshold=-18dB:ratio=2.5:attack=5:release=60,volume=3dB",
+        "-af", "highpass=f=80,acompressor=threshold=-20dB:ratio=3:attack=5:release=50:makeup=4dB,volume=5dB,alimiter=limit=0.95",
         "-c:a", "libmp3lame", "-b:a", "128k", str(tmp),
     ], check=True)
     tmp.replace(path)

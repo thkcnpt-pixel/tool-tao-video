@@ -1,0 +1,62 @@
+name: Produce Short Video (3 ca/ngày)
+
+on:
+  schedule:
+    # Ca 1 (Sáng 05:00 VN) -> Render lúc 04:00 VN (21:00 UTC hôm trước)
+    - cron: "0 21 * * *"
+    # Ca 2 (Trưa 11:30 VN) -> Render lúc 10:30 VN (03:30 UTC)
+    - cron: "30 3 * * *"
+    # Ca 3 (Tối 18:00 VN)  -> Render lúc 17:00 VN (10:00 UTC)
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Ca phát sóng (SANG / TRUA / TOI - để trống sẽ lấy dòng CHO_TAO đầu tiên)"
+        required: false
+        default: ""
+      seed_topic:
+        description: "Thêm nhanh 1 chủ đề CHO_TAO mới trước khi chạy (tùy chọn)"
+        required: false
+        default: ""
+
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install FFmpeg & Python dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-core
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Produce video & send to Telegram for approval
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          DRIVE_OUTPUT_FOLDER_ID: ${{ secrets.DRIVE_OUTPUT_FOLDER_ID }}
+          DRIVE_MUSIC_FOLDER_ID: ${{ secrets.DRIVE_MUSIC_FOLDER_ID }}
+          DRIVE_OAUTH_CLIENT_ID: ${{ secrets.DRIVE_OAUTH_CLIENT_ID }}
+          DRIVE_OAUTH_CLIENT_SECRET: ${{ secrets.DRIVE_OAUTH_CLIENT_SECRET }}
+          DRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.DRIVE_OAUTH_REFRESH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.slot }}" ]; then
+            ARGS="$ARGS --slot ${{ github.event.inputs.slot }}"
+          fi
+          if [ -n "${{ github.event.inputs.seed_topic }}" ]; then
+            ARGS="$ARGS --seed \"${{ github.event.inputs.seed_topic }}\""
+          fi
+          eval python src/produce.py $ARGS
