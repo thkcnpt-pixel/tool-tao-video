@@ -6,15 +6,26 @@ import random
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
-try:
-    from .google_auth import get_credentials
-except ImportError:
-    from google_auth import get_credentials
+from google.oauth2.credentials import Credentials
+
+DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
+
+
+def get_drive_credentials():
+    """Drive chạy bằng OAuth tài khoản chủ kênh (Service Account không có dung lượng lưu trữ)."""
+    return Credentials(
+        token=None,
+        refresh_token=os.environ["DRIVE_OAUTH_REFRESH_TOKEN"],
+        client_id=os.environ["DRIVE_OAUTH_CLIENT_ID"],
+        client_secret=os.environ["DRIVE_OAUTH_CLIENT_SECRET"],
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=DRIVE_SCOPES,
+    )
 
 
 class DriveClient:
     def __init__(self):
-        self.svc = build("drive", "v3", credentials=get_credentials(), cache_discovery=False)
+        self.svc = build("drive", "v3", credentials=get_drive_credentials(), cache_discovery=False)
 
     def upload(self, path, folder_id=None, name=None, mime="video/mp4"):
         """Upload file, trả về drive_file_id."""
