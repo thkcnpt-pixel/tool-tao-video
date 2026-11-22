@@ -156,11 +156,18 @@ function seek(t) {
   if (s.rows) s.rows.forEach(r => r.el.classList.toggle('active', p >= r.start && p < r.end));
   if (s.st) s.st.forEach(r => r.el.classList.toggle('active', p >= r.start && p < r.end));
   if (s.bl) s.bl.forEach(r => r.el.classList.toggle('active', p >= r.start));
-  // phụ đề
+  // phụ đề Karaoke từng từ
   const sub = document.getElementById('sub');
   const c = (s.subs || []).find(c => lt >= c.s && lt < c.e);
   if (c) {
-    if (c.id !== lastSub) { sub.innerHTML = c.words.map((w, i) => i === c.kw ? `<span class="kw">${esc(w)}</span>` : esc(w)).join(' '); lastSub = c.id; }
+    const wt = c.wt || c.words.map(w => ({ w, s: c.s, e: c.e }));
+    let ai = wt.findIndex(x => lt >= x.s && lt < x.e);
+    if (ai < 0) ai = lt < wt[0].s ? 0 : wt.length - 1;
+    sub.innerHTML = wt.map((x, i) => {
+      const st = i === ai ? 'active' : (i < ai ? 'past' : 'future');
+      const kw = i === c.kw ? ' kw' : '';
+      return `<span class="w ${st}${kw}">${esc(x.w)}</span>`;
+    }).join('');
     sub.style.opacity = 1;
   } else sub.style.opacity = 0;
   // robot

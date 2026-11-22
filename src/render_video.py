@@ -11,11 +11,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bg_generator  # noqa: E402
+import music_generator  # noqa: E402
 import tts_engine  # noqa: E402
 import video_composer  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-PAD = 0.5  # giây nghỉ cuối mỗi cảnh
+PAD = 0.18  # giây nghỉ gọn cuối mỗi cảnh
 
 
 def build_segments(script):
@@ -29,6 +30,7 @@ def build_segments(script):
 def pick_music(explicit):
     if explicit:
         return Path(explicit)
+    music_generator.ensure_music()
     files = sorted((ROOT / "assets" / "music").glob("*.mp3"))
     return random.choice(files) if files else None
 
@@ -37,7 +39,9 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
     theme = script.get("bg_theme", "cyber_blue")
     bg = bg_generator.generate(theme)
     voice = script.get("voice", tts_engine.DEFAULT_VOICE)
-    rate = script.get("voice_rate", tts_engine.DEFAULT_RATE)
+    rate = script.get("voice_rate") or tts_engine.DEFAULT_RATE
+    if rate == "+8%":
+        rate = tts_engine.DEFAULT_RATE
     segs = build_segments(script)
     with tempfile.TemporaryDirectory() as tmp:
         t, audios, durs, cid = 0.0, [], [], 0

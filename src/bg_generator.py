@@ -1,4 +1,4 @@
-"""Sinh 4 nền Motion Graphics vòng lặp liền mạch 100% bằng code (numpy + PIL + FFmpeg)."""
+"""Sinh 4 nền Motion Graphics vòng lặp liền mạch 100% bằng code (Dark High-Contrast để nổi bật chữ & UI)."""
 import math
 import random
 import subprocess
@@ -14,18 +14,21 @@ FRAMES = FPS * SECONDS
 ROOT = Path(__file__).resolve().parent.parent
 BG_DIR = ROOT / "assets" / "bg"
 
-# base: màu nền tối; layers: các dải aurora (RGB 0-255)
+# Nền tối sâu (Deep Dark Mode) để thẻ Glassmorphism và chữ trắng nổi bật rõ ràng
 THEMES = {
-    "cyber_blue": dict(base=(5, 10, 32), layers=[(30, 110, 255), (0, 220, 255), (90, 70, 240)], grid=(80, 170, 255)),
-    "neon_purple": dict(base=(14, 5, 32), layers=[(170, 60, 255), (0, 220, 255), (255, 60, 200)], grid=(190, 120, 255)),
-    "emerald_tech": dict(base=(3, 20, 22), layers=[(16, 210, 140), (0, 190, 190), (60, 130, 255)], grid=(80, 230, 190)),
-    "sunset_amber": dict(base=(26, 8, 24), layers=[(255, 170, 30), (255, 80, 140), (150, 60, 220)], grid=(255, 190, 120)),
+    "cyber_blue": dict(base=(3, 6, 18), layers=[(18, 85, 220), (0, 180, 230), (65, 50, 200)], grid=(70, 160, 255)),
+    "neon_purple": dict(base=(8, 3, 20), layers=[(140, 40, 220), (0, 175, 220), (210, 45, 165)], grid=(180, 110, 255)),
+    "emerald_tech": dict(base=(2, 12, 14), layers=[(10, 170, 115), (0, 150, 160), (45, 105, 210)], grid=(70, 215, 175)),
+    "sunset_amber": dict(base=(16, 4, 15), layers=[(215, 130, 20), (215, 55, 115), (120, 45, 185)], grid=(245, 175, 105)),
 }
 
-# Aurora tính ở độ phân giải thấp rồi phóng to cho nhanh
 LW, LH = 270, 480
 _xs = np.linspace(0, 1, LW, dtype=np.float32)[None, :]
 _ys = np.linspace(0, 1, LH, dtype=np.float32)[:, None]
+# Vignette: làm tối vùng trung tâm và viền để chữ/UI nổi bật
+_vx = (_xs - 0.5) * 2.0
+_vy = (_ys - 0.5) * 2.0
+_center_dim = 1.0 - 0.28 * np.exp(-(_vx * _vx * 1.8 + _vy * _vy * 1.2))
 
 
 def _aurora(theme, t):
@@ -34,13 +37,14 @@ def _aurora(theme, t):
     img += np.array(theme["base"], dtype=np.float32)
     for i, col in enumerate(theme["layers"]):
         k = i + 1
-        y0 = 0.25 + 0.25 * i
+        y0 = 0.22 + 0.28 * i
         wave = 0.10 * np.sin(2 * math.pi * (1.5 * _xs + t * (1 if i % 2 == 0 else -1)) + i * 2.1)
         wave += 0.05 * np.sin(2 * math.pi * (3.0 * _xs - t * 2) + i)
         center = y0 + wave
-        d = (_ys - center) / (0.11 + 0.03 * k)
-        inten = np.exp(-d * d) * (0.55 + 0.25 * np.sin(2 * math.pi * (t + i / 3.0)))
-        img += inten[..., None] * np.array(col, dtype=np.float32) * 0.55
+        d = (_ys - center) / (0.10 + 0.025 * k)
+        inten = np.exp(-d * d) * (0.48 + 0.20 * np.sin(2 * math.pi * (t + i / 3.0)))
+        img += inten[..., None] * np.array(col, dtype=np.float32) * 0.32
+    img *= _center_dim[..., None]
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
@@ -51,17 +55,17 @@ def _frame(theme, idx, particles):
     d = ImageDraw.Draw(over)
     gr, gg, gb = theme["grid"]
     step = 90
-    off = int(t * step)  # cuộn đúng 1 ô lưới / vòng lặp
+    off = int(t * step)
     for x in range(0, W + 1, step):
-        d.line([(x, 0), (x, H)], fill=(gr, gg, gb, 16), width=1)
+        d.line([(x, 0), (x, H)], fill=(gr, gg, gb, 14), width=1)
     for y in range(-step, H + step, step):
         yy = y + off
-        d.line([(0, yy), (W, yy)], fill=(gr, gg, gb, 16), width=1)
+        d.line([(0, yy), (W, yy)], fill=(gr, gg, gb, 14), width=1)
     for (px, py, r, spd, ph) in particles:
         y = (py - spd * H * t) % H
-        a = int(120 + 100 * math.sin(2 * math.pi * (t * 2 + ph)))
-        d.ellipse([px - r * 3, y - r * 3, px + r * 3, y + r * 3], fill=(gr, gg, gb, max(a // 6, 8)))
-        d.ellipse([px - r, y - r, px + r, y + r], fill=(255, 255, 255, max(a, 40)))
+        a = int(110 + 95 * math.sin(2 * math.pi * (t * 2 + ph)))
+        d.ellipse([px - r * 3, y - r * 3, px + r * 3, y + r * 3], fill=(gr, gg, gb, max(a // 7, 6)))
+        d.ellipse([px - r, y - r, px + r, y + r], fill=(255, 255, 255, max(a, 35)))
     base = base.convert("RGBA")
     base.alpha_composite(over)
     return base.convert("RGB")
@@ -74,9 +78,9 @@ def generate(name, force=False):
     BG_DIR.mkdir(parents=True, exist_ok=True)
     theme = THEMES[name]
     rnd = random.Random(name)
-    particles = [(rnd.uniform(0, W), rnd.uniform(0, H), rnd.uniform(2, 5), rnd.choice([1, 1, 2]), rnd.random()) for _ in range(70)]
+    particles = [(rnd.uniform(0, W), rnd.uniform(0, H), rnd.uniform(2, 4.5), rnd.choice([1, 1, 2]), rnd.random()) for _ in range(65)]
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
-           "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "24",
+           "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "23",
            "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out)]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for i in range(FRAMES):

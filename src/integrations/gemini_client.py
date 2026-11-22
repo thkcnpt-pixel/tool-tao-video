@@ -22,7 +22,7 @@ SCHEMA_EXAMPLE = {
     "bg_theme": "cyber_blue",
     "mascot": True,
     "voice": "vi-VN-HoaiMyNeural",
-    "voice_rate": "+8%",
+    "voice_rate": "+15%",
     "hook": {"headline": ["Dòng 1", "Dòng 2", "Dòng nhấn mạnh!"], "voiceover": "..."},
     "scenes": [
         {"type": "chat_demo", "title": "...", "user_prompt": "...", "ai_reply": "...", "voiceover": "..."},
