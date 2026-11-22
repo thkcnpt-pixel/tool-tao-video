@@ -1,0 +1,69 @@
+{
+  "badge": "TIN CÔNG NGHỆ 2026",
+  "bg_theme": "cyber_blue",
+  "mascot": true,
+  "voice": "vi-VN-HoaiMyNeural",
+  "voice_rate": "+8%",
+  "hook": {
+    "headline": [
+      "Đừng nâng cấp AI",
+      "trước khi xem",
+      "bảng này!"
+    ],
+    "voiceover": "Nhiều bạn mất tiền oan khi nâng cấp AI mà chưa biết 3 điểm khác biệt lớn nhất này."
+  },
+  "scenes": [
+    {
+      "type": "chat_demo",
+      "title": "Thử giao việc thực tế",
+      "user_prompt": "Tóm tắt báo cáo 50 trang và lập bảng so sánh",
+      "ai_reply": "Đã hoàn thành trong 12 giây kèm biểu đồ và 3 điểm rủi ro chính.",
+      "voiceover": "Chỉ cần nhập đúng một yêu cầu, hệ thống tự xử lý toàn bộ tài liệu dài trong vài giây."
+    },
+    {
+      "type": "comparison",
+      "title": "Free vs Pro khác gì?",
+      "left_title": "Bản Free",
+      "left_items": [
+        "Mô hình tiêu chuẩn",
+        "Giới hạn lượt hỏi",
+        "Không có Flow video"
+      ],
+      "right_title": "Bản Pro",
+      "right_items": [
+        "Mô hình mạnh nhất",
+        "2TB Google Drive",
+        "1.000+ tín dụng Flow"
+      ],
+      "voiceover": "Bản Free chỉ đủ dùng cơ bản, còn Pro có ngay 2TB Drive và hơn 1.000 tín dụng tạo video Flow."
+    },
+    {
+      "type": "stat_card",
+      "title": "Tốc độ xử lý mới",
+      "metric": "10X",
+      "summary": "Nhanh gấp 10 lần quy trình thủ công truyền thống",
+      "bullets": [
+        "Tự động hóa trọn gói 0đ",
+        "Chạy trực tiếp trên GitHub Actions"
+      ],
+      "voiceover": "Quy trình mới giúp rút ngắn gấp 10 lần thời gian làm nội dung mỗi ngày."
+    },
+    {
+      "type": "bullet_steps",
+      "title": "3 bước chọn gói chuẩn",
+      "steps": [
+        "Xác định nhu cầu dùng hàng ngày hay thỉnh thoảng",
+        "Tận dụng dung lượng 2TB Drive đi kèm cho tài liệu",
+        "Thử bản tiêu chuẩn trước khi nâng cấp lâu dài"
+      ],
+      "voiceover": "Hãy chốt theo 3 bước này để không tốn tiền thừa mà vẫn tối ưu hiệu suất làm việc."
+    }
+  ],
+  "cta": {
+    "highlight_metric": "70%",
+    "summary": "Tiết kiệm 70% thời gian làm việc mỗi ngày",
+    "button_text": "Xem chi tiết ở phần mô tả",
+    "voiceover": "Chọn đúng gói phù hợp giúp bạn tiết kiệm 70 phần trăm thời gian mỗi ngày."
+  },
+  "caption": "So sánh nhanh Free vs Pro 2026 cực dễ hiểu #ai #congnghe #shorts"
+}
