@@ -20,6 +20,7 @@ import render_video  # noqa: E402
 from drive_client import DriveClient  # noqa: E402
 from gemini_client import generate_script  # noqa: E402
 from sheets_client import SheetsClient  # noqa: E402
+from telegram_bot import TelegramBot  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 VN = datetime.timezone(datetime.timedelta(hours=7))
@@ -59,10 +60,11 @@ def main():
         music = drive.random_music(tmp)  # None -> render_video fallback assets/music/
         render_video.render(script, a.output, music=music)
         vid = drive.upload(a.output, name=f"{row['id']}.mp4")
-    print(f"[drive] upload OK drive_file_id={vid}")
-    # Giai đoạn 3 sẽ đổi sang CHO_DUYET sau khi gửi Telegram thành công
-    sheets.update(r, video_url_or_drive_id=vid, status="CHO_DUYET")
-    print(f"[sheets] dòng {r}: status=CHO_DUYET, video_url_or_drive_id={vid}")
+        print(f"[drive] upload OK drive_file_id={vid}")
+        msg_id = TelegramBot().send_for_approval(a.output, row["id"], row["topic"], script["caption"], drive_id=vid)
+        print(f"[telegram] đã gửi tin nhắn duyệt msg_id={msg_id}")
+    sheets.update(r, video_url_or_drive_id=vid, telegram_msg_id=msg_id, status="CHO_DUYET")
+    print(f"[sheets] dòng {r}: status=CHO_DUYET, msg_id={msg_id}, drive_id={vid}")
     return 0
 
 
