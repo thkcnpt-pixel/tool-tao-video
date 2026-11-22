@@ -28,6 +28,18 @@ function tg_(method, payload) {
   });
 }
 
+function dropPendingWebhook_() {
+  var p = PropertiesService.getScriptProperties();
+  var token = p.getProperty('TELEGRAM_BOT_TOKEN');
+  var url = ScriptApp.getService().getUrl();
+  if (!token || !url) return;
+  UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({url: url, drop_pending_updates: true, allowed_updates: ['message', 'callback_query']}),
+    muteHttpExceptions: true
+  });
+}
+
 function dispatchPublish_(rowId) {
   var p = PropertiesService.getScriptProperties();
   var pat = p.getProperty('GITHUB_PAT');
@@ -94,6 +106,7 @@ function doPost(e) {
           tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
             text: '❌ Đã hủy ' + rowId});
         }
+        dropPendingWebhook_();
       } finally {
         lock.releaseLock();
       }
