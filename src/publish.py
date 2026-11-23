@@ -37,6 +37,30 @@ def main():
     a = ap.parse_args()
 
     sheets = SheetsClient()
+    if a.video_id and str(a.video_id).startswith("REGEN:"):
+        real_id = str(a.video_id).split("REGEN:", 1)[1]
+        print(f"[publish] nhận lệnh TẠO LẠI qua cầu nối Apps Script cho dòng {real_id}")
+        try:
+            TelegramBot().clear_pending_webhook()
+        except Exception:
+            pass
+        target = None
+        for cand in sheets.rows():
+            if cand["id"] == real_id:
+                target = cand
+                break
+        if target and target.get("status") in ("DA_DANG", "DANG_TAO_LAI"):
+            print(f"[publish] BỎ QUA REGEN trùng cho {real_id} (status={target.get('status')})")
+            return 0
+        if target:
+            sheets.update(target["_row"], status="DANG_TAO_LAI")
+            bot = TelegramBot()
+            notice_mid = bot.send_text(f"🔄 Đang viết lại kịch bản & dựng video mới cho {real_id} (~2-3 phút)...")
+            bot.cleanup_duplicate_replies(int(target.get("telegram_msg_id") or 0) - 1, notice_mid)
+        import produce
+        sys.argv = ["produce.py", "--video-id", real_id]
+        return produce.main()
+
     row = find_target_row(sheets, a.video_id)
     if not row:
         print(f"[publish] không có dòng DA_DUYET nào cần đăng (video_id={a.video_id!r})")

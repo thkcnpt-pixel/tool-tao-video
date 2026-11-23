@@ -27,11 +27,33 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
+      - name: Cache Playwright Chromium browser
+        if: startsWith(github.event.inputs.video_id, 'REGEN:')
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
       - name: Install dependencies
-        run: pip install google-api-python-client google-auth requests
+        run: |
+          if [[ "${{ github.event.inputs.video_id }}" == REGEN:* ]]; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-core
+            pip install -r requirements.txt
+            if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then
+              python -m playwright install --with-deps chromium
+            else
+              python -m playwright install-deps chromium
+            fi
+          else
+            pip install google-api-python-client google-auth requests
+          fi
 
       - name: Pull video from Drive & publish to YouTube Shorts + Telegram
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DRIVE_OUTPUT_FOLDER_ID: ${{ secrets.DRIVE_OUTPUT_FOLDER_ID }}
+          DRIVE_MUSIC_FOLDER_ID: ${{ secrets.DRIVE_MUSIC_FOLDER_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           DRIVE_OAUTH_CLIENT_ID: ${{ secrets.DRIVE_OAUTH_CLIENT_ID }}

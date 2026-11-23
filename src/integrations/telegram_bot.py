@@ -25,7 +25,7 @@ class TelegramBot:
         return {"inline_keyboard": [
             [
                 {"text": "✅ Duyệt", "callback_data": f"APPROVE:{row_id}"},
-                {"text": "🔄 Tạo lại", "callback_data": f"REGEN:{row_id}"},
+                {"text": "🔄 Tạo lại", "callback_data": f"APPROVE:REGEN:{row_id}"},
                 {"text": "❌ Hủy", "callback_data": f"REJECT:{row_id}"},
             ]
         ]}
@@ -79,7 +79,7 @@ class TelegramBot:
         except Exception:
             return
         # Giữ lại duy nhất 1 tin báo "✅ Đã duyệt" đầu tiên (a_id + 1), xóa toàn bộ các tin lặp từ (a_id + 2) tới (f_id - 1)
-        for mid in range(a_id + 2, f_id):
+        for mid in range(a_id + 2, int(f_id)):
             try:
                 self._call("deleteMessage", data={"chat_id": self.chat_id, "message_id": mid}, timeout=10)
             except Exception:
