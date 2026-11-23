@@ -94,7 +94,7 @@ def main():
         music = drive.random_music(tmp)
         render_video.render(script, a.output, music=music)
         vid = drive.upload(a.output, name=f"{row['id']}.mp4")
-        drive.cleanup_old_videos(keep_latest=45)
+        drive.cleanup_old_videos(keep_latest=100)
         print(f"[drive] upload OK drive_file_id={vid}")
         msg_id = TelegramBot().send_for_approval(a.output, row["id"], row["topic"], script["caption"], drive_id=vid)
         print(f"[telegram] đã gửi tin nhắn duyệt msg_id={msg_id}")
@@ -104,4 +104,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        try:
+            TelegramBot().send_text(f"⚠️ Lỗi khi dựng video tự động (produce.py):\n{type(exc).__name__}: {exc}")
+        except Exception:
+            pass
+        raise

@@ -168,7 +168,11 @@ function seek(t) {
 
   const s = T.segments[si], lt = t - s.start, p = lt / s.dur;
   segEls.forEach((e, i) => e.style.opacity = i === si ? clamp(Math.min(lt / 0.2, (s.dur - lt) / 0.15)) : 0);
-  s.R.forEach(([n, at]) => n.style.opacity = rise(p, at, 0.06));
+  s.R.forEach(([n, at]) => {
+    const rv = easeOut(rise(p, at, 0.09));
+    n.style.opacity = rv;
+    n.style.transform = `translateY(${(1 - rv) * 24}px) scale(${0.96 + 0.04 * rv})`;
+  });
   if (s.metricEl) s.metricEl.textContent = formatCounter(s.metricRaw, (lt - 0.1) / 0.65);
   if (s.typed) {
     const full = s.data.user_prompt, k = clamp((p - 0.12) / 0.38);

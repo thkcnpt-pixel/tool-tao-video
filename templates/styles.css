@@ -41,7 +41,7 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
   display: flex; flex-direction: column; justify-content: center; gap: 22px; }
 .glass { background: var(--glass); border: 2px solid var(--glass-line); border-radius: 36px; padding: 28px 32px;
   box-shadow: 0 14px 44px rgba(0,0,0,.65); }
-.reveal { opacity: 0; }
+.reveal { opacity: 0; will-change: opacity, transform; }
 .title { font-size: 46px; font-weight: 800; line-height: 1.2; text-shadow: 0 4px 20px rgba(0,0,0,.85); }
 .label { font-size: 26px; font-weight: 700; color: var(--accent); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
 .text { font-size: 38px; font-weight: 600; line-height: 1.35; }

@@ -59,6 +59,11 @@ class TelegramBot:
             )
         return str(msg["message_id"])
 
+
+    def send_text(self, text):
+        """Gửi tin nhắn văn bản (dùng cho thông báo trạng thái / cảnh báo lỗi)."""
+        return self._call("sendMessage", data={"chat_id": self.chat_id, "text": text[:4000]}, timeout=20)
+
     def set_webhook(self, url):
         return self._call("setWebhook", data={"url": url, "allowed_updates": json.dumps(["message", "callback_query"])})
 

@@ -65,8 +65,8 @@ class DriveClient:
             print(f"[drive] không lấy được nhạc từ Drive ({ex!r}) -> fallback assets/music/")
             return None
 
-    def cleanup_old_videos(self, keep_latest=45, folder_id=None):
-        """Tự động dọn các video cũ hơn 45 bản gần nhất (~15 ngày) trên Drive để không bao giờ đầy 15GB."""
+    def cleanup_old_videos(self, keep_latest=100, folder_id=None):
+        """Tự động dọn các video cũ hơn 100 bản gần nhất (~33 ngày) trên Drive để không bao giờ đầy 15GB."""
         try:
             folder_id = folder_id or os.environ.get("DRIVE_OUTPUT_FOLDER_ID")
             if not folder_id:
