@@ -49,7 +49,7 @@ def _split_caption(caption, topic):
     return title[:100], desc.strip()
 
 
-def upload_short(video_path, caption, topic="", privacy="private"):
+def upload_short(video_path, caption, topic="", privacy="private", publish_at=None):
     """Upload video lên YouTube ở chế độ Private. Trả về URL YouTube Shorts."""
     yt = get_youtube_service()
     title, desc = _split_caption(caption, topic)
@@ -57,13 +57,14 @@ def upload_short(video_path, caption, topic="", privacy="private"):
         "snippet": {
             "title": title,
             "description": desc,
-            "tags": ["Shorts", "AI", "CongNghe"],
+            "tags": list(dict.fromkeys(["Shorts", "AI", "CongNghe", "Gemini", "TikTok"] + [t.lstrip("#") for t in re.findall(r"#\w+", caption)]))[:15],
             "categoryId": "28",  # Science & Technology
             "defaultLanguage": "vi",
         },
         "status": {
             "privacyStatus": privacy,
             "selfDeclaredMadeForKids": False,
+            **({"publishAt": publish_at} if publish_at and privacy == "private" else {}),
         },
     }
     media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True, chunksize=4 * 1024 * 1024)

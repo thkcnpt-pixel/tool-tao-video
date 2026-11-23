@@ -64,3 +64,24 @@ class DriveClient:
         except Exception as ex:
             print(f"[drive] không lấy được nhạc từ Drive ({ex!r}) -> fallback assets/music/")
             return None
+
+    def cleanup_old_videos(self, keep_latest=45, folder_id=None):
+        """Tự động dọn các video cũ hơn 45 bản gần nhất (~15 ngày) trên Drive để không bao giờ đầy 15GB."""
+        try:
+            folder_id = folder_id or os.environ.get("DRIVE_OUTPUT_FOLDER_ID")
+            if not folder_id:
+                return 0
+            q = f"'{folder_id}' in parents and trashed=false and mimeType='video/mp4'"
+            res = self.svc.files().list(q=q, orderBy="createdTime desc", pageSize=100,
+                                        fields="files(id,name,createdTime)", supportsAllDrives=True).execute()
+            files = res.get("files", [])
+            removed = 0
+            for f in files[keep_latest:]:
+                self.svc.files().delete(fileId=f["id"], supportsAllDrives=True).execute()
+                removed += 1
+            if removed:
+                print(f"[drive] đã dọn {removed} video cũ trên Drive")
+            return removed
+        except Exception as ex:
+            print(f"[drive] bỏ qua cleanup ({ex!r})")
+            return 0

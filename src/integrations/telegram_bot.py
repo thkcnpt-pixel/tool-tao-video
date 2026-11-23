@@ -42,7 +42,9 @@ class TelegramBot:
                 "sendVideo",
                 data={"chat_id": self.chat_id, "caption": text[:1024], "parse_mode": "HTML",
                       "supports_streaming": "true", "reply_markup": json.dumps(self.approval_keyboard(row_id))},
-                files={"video": (os.path.basename(video_path), f, "video/mp4")},
+                files=(lambda th: {"video": (os.path.basename(video_path), f, "video/mp4"),
+                                   **({"thumbnail": ("thumb.jpg", open(th, "rb"), "image/jpeg")} if os.path.exists(th) else {})}
+                       )(os.path.splitext(video_path)[0] + ".jpg"),
             )
         return str(msg["message_id"])
 
