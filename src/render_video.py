@@ -17,6 +17,7 @@ import video_composer  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 PAD = 0.18  # giây nghỉ gọn cuối mỗi cảnh
+PAD_LAST = 0.05  # cảnh cuối cắt sát để Seamless Loop nối mượt về 0:00
 
 
 def build_segments(script):
@@ -51,10 +52,11 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
             for c in chunks:
                 c["id"] = cid
                 cid += 1
-            s.update(start=t, dur=d + PAD, subs=chunks)
-            t += d + PAD
+            pad = PAD_LAST if i == len(segs) - 1 else PAD
+            s.update(start=t, dur=d + pad, subs=chunks)
+            t += d + pad
             audios.append(a)
-            durs.append(d + PAD)
+            durs.append(d + pad)
             print(f"[tts] {s['type']:<12} {d:5.1f}s  {len(chunks)} cụm phụ đề")
         timeline = dict(badge=script.get("badge", ""), bg_theme=theme, mascot=script.get("mascot", True),
                         segments=segs, total=t)

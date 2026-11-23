@@ -168,7 +168,13 @@ function seek(t) {
   document.getElementById('seg-idx').textContent = `${si + 1}/${T.segments.length}`;
 
   const s = T.segments[si], lt = t - s.start, p = lt / s.dur;
-  segEls.forEach((e, i) => e.style.opacity = i === si ? clamp(Math.min(lt / 0.2, (s.dur - lt) / 0.15)) : 0);
+  segEls.forEach((e, i) => {
+    if (i !== si) { e.style.opacity = 0; return; }
+    const fadeOut = si === T.segments.length - 1 ? 1 : (s.dur - lt) / 0.15;
+    e.style.opacity = clamp(Math.min(lt / 0.16, fadeOut));
+    const hookZoom = (si === 0 && lt < 0.38) ? (1 + 0.15 * (1 - easeOut(lt / 0.38))) : 1;
+    e.style.transform = hookZoom !== 1 ? `scale(${hookZoom})` : 'none';
+  });
   s.R.forEach(([n, at]) => {
     const rv = easeOut(rise(p, at, 0.09));
     n.style.opacity = rv;

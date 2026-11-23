@@ -93,7 +93,8 @@ Yêu cầu:
 - comparison: left_items và right_items cùng 3 mục, mỗi mục tối đa 28 ký tự. bullet_steps: đúng 3 bước, mỗi bước tối đa 60 ký tự.
 - stat_card: metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%) để chạy hiệu ứng đếm số; bullets 2 mục ngắn.
 - cta.highlight_metric: bắt đầu bằng con số (vd 70%, 10X, 3 giờ).
-- Mỗi voiceover 12-26 từ, tổng thời lượng đọc khoảng 25-35 giây.
+- Mỗi voiceover 12-26 từ, tổng thời lượng đọc khoảng 25-35 giây (tổng số từ voiceover toàn bộ video từ 60 đến 145 từ).
+- KỸ THUẬT SEAMLESS LOOP (RẤT QUAN TRỌNG): Câu cuối của cta.voiceover hãy kết thúc sao cho khi video tự phát lặp lại từ giây 0:00 (hook.voiceover), người nghe cảm giác câu chuyện nối liền mạch tự nhiên!
 - caption: tiêu đề hấp dẫn + 1 câu mô tả + 3-5 hashtag, tối đa 220 ký tự.
 - mascot=true, voice="{voice}", voice_rate="+22%".
 
@@ -144,6 +145,18 @@ def validate(s, slot=""):
     need(isinstance(c, dict) and c.get("highlight_metric") and c.get("summary") and c.get("voiceover"), "cta sai")
     c.setdefault("button_text", "Xem chi tiết ở phần mô tả")
     need(isinstance(s.get("caption"), str) and s["caption"].strip(), "thiếu caption")
+    # Auto-QC: kiểm tra tổng độ dài lời thoại & cắt gọn các dòng chữ quá dài tránh vỡ khung
+    all_vo = [h["voiceover"]] + [sc["voiceover"] for sc in s["scenes"]] + [c["voiceover"]]
+    total_words = sum(len(str(v).split()) for v in all_vo)
+    need(45 <= total_words <= 170, f"tổng số từ voiceover không hợp lý ({total_words} từ)")
+    h["headline"] = [str(x).strip()[:28] for x in h["headline"][:3]]
+    for sc in s["scenes"]:
+        sc["title"] = str(sc["title"]).strip()[:46]
+        if sc["type"] == "comparison":
+            sc["left_items"] = [str(x).strip()[:36] for x in sc["left_items"]]
+            sc["right_items"] = [str(x).strip()[:36] for x in sc["right_items"]]
+        elif sc["type"] == "bullet_steps":
+            sc["steps"] = [str(x).strip()[:75] for x in sc["steps"]]
     return s
 
 

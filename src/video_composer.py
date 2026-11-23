@@ -16,6 +16,13 @@ def _make_sfx_track(timeline, workdir):
     n = int(total * SR)
     buf = np.zeros(n, dtype=np.float32)
 
+    # Opening Hook Chime (0.02s..0.28s): âm thanh mở màn sáng gọn giữ chân người xem trong 0.3s đầu
+    hdur = min(int(0.26 * SR), n)
+    if hdur > 0:
+        ht = np.arange(hdur, dtype=np.float32) / SR
+        henv = np.exp(-ht * 14) * np.minimum(ht / 0.005, 1.0)
+        buf[:hdur] += 0.20 * (np.sin(2 * np.pi * 1046.5 * ht) + 0.6 * np.sin(2 * np.pi * 1567.98 * ht)) * henv
+
     for seg in timeline["segments"]:
         s0 = int(seg["start"] * SR)
         dur = int(0.22 * SR)

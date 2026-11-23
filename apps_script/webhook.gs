@@ -4,14 +4,16 @@
  *   - Nút [✅ Duyệt] / [🔄 Tạo lại] / [❌ Hủy]
  *   - Reply vào video để sửa caption
  *   - Menu lệnh tự động hiện khi gõ dấu /:
- *       /tao <chủ đề>   -> tạo ngay video mới theo chủ đề bạn gõ (bỏ trống chủ đề thì lấy từ lịch CHO_TAO)
- *       /sang, /trua, /toi -> tạo ngay 1 video cho đúng ca Sáng / Trưa / Tối
+ *       /tao <chủ đề>   -> dựng ngay video mới theo chủ đề bạn gõ (bỏ trống chủ đề thì lấy từ lịch CHO_TAO)
+ *       /them <chủ đề>  -> chỉ lưu chủ đề vào hàng đợi CHO_TAO trên Sheet để Cron tự dựng dần
+ *       /sang, /trua, /toi -> dựng ngay 1 video cho đúng ca Sáng / Trưa / Tối
  *       /lich           -> xem thống kê số bài chờ tạo / chờ duyệt / đã đăng + link mở Google Sheet
+ *       /stats          -> xem danh sách các video YouTube Shorts đã xuất bản & phân bổ theo ca
  *       /help           -> bảng hướng dẫn chi tiết toàn bộ tính năng để không bao giờ quên
  */
 var DEFAULT_SHEET_ID = '1ZXl4mwJ3XWA_L428OG78LK1olhrWEpqptlwhx6CKxNo';
 var TAB = 'Schedule';
-var COL_ID = 1, COL_TOPIC = 4, COL_CAPTION = 7, COL_STATUS = 8, COL_MSG_ID = 9;
+var COL_ID = 1, COL_SLOT = 3, COL_TOPIC = 4, COL_CAPTION = 7, COL_STATUS = 8, COL_MSG_ID = 9, COL_REF = 10;
 
 function getSheet_() {
   var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID') || DEFAULT_SHEET_ID;
@@ -66,11 +68,10 @@ var HELP_TEXT =
   '1️⃣ CÁC LỆNH GÕ NHANH (chỉ cần gõ dấu / là hiện menu):\n' +
   '• /tao — Dựng ngay 1 video tiếp theo trong lịch\n' +
   '• /tao <chủ đề> — Dựng ngay video theo chủ đề bạn gõ\n' +
-  '  (VD: /tao 3 mẹo dùng Gemini Pro làm báo cáo)\n' +
-  '• /sang — Dựng ngay 1 video cho Ca Sáng (05:00)\n' +
-  '• /trua — Dựng ngay 1 video cho Ca Trưa (11:30)\n' +
-  '• /toi — Dựng ngay 1 video cho Ca Tối (18:00)\n' +
-  '• /lich — Xem số bài Chờ tạo, Chờ duyệt, Đã đăng & link Google Sheet\n' +
+  '• /them <chủ đề> — Lưu chủ đề vào hàng đợi Google Sheet để chạy dần theo lịch Cron\n' +
+  '• /sang, /trua, /toi — Dựng ngay 1 video cho Ca Sáng / Trưa / Tối\n' +
+  '• /lich — Xem số bài Chờ tạo, Chờ duyệt, Đã đăng & 3 chủ đề sắp tới\n' +
+  '• /stats — Xem báo cáo các video YouTube Shorts đã xuất bản\n' +
   '• /help — Xem lại bảng hướng dẫn này\n\n' +
   '2️⃣ CÁCH DUYỆT & SỬA VIDEO KHI BOT GỬI VỀ:\n' +
   '• ✏️ Sửa Caption: Chạm giữ vào tin nhắn video -> chọn Trả lời (Reply) -> gõ caption mới.\n' +
@@ -144,7 +145,7 @@ function doPost(e) {
       return ContentService.createTextOutput('ok');
     }
 
-    // 2) Tin nhắn văn bản: Lệnh /help, /start, /tao, /sang, /trua, /toi, /lich hoặc Reply sửa caption
+    // 2) Tin nhắn văn bản: Lệnh /help, /start, /them, /stats, /tao, /sang, /trua, /toi, /lich hoặc Reply sửa caption
     if (update.message && update.message.text) {
       var m = update.message;
       var mChat = String(m.chat.id);
@@ -154,6 +155,54 @@ function doPost(e) {
       // Lệnh /help hoặc /start
       if (/^\/(help|start)(@\S+)?$/i.test(txt)) {
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id, text: HELP_TEXT});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
+      // Lệnh /them <chủ đề> (chỉ ghi vào hàng đợi CHO_TAO trên Sheet trong 1 giây, chưa dựng ngay)
+      if (txt.indexOf('/them') === 0) {
+        var newTopic = txt.replace(/^\/them(@\S+)?\s*/i, '').trim();
+        if (!newTopic) {
+          tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+            text: '💡 Hãy gõ kèm chủ đề cần lưu vào hàng đợi.\nVí dụ: /them Cách dùng AI tóm tắt video dài 1 tiếng'});
+          dropPendingWebhook_();
+          return ContentService.createTextOutput('ok');
+        }
+        var shAdd = getSheet_();
+        var now = new Date();
+        var vnStr = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyyMMdd_HHmmss');
+        var dateStr = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+        var themes = ['cyber_blue', 'neon_purple', 'emerald_tech', 'sunset_amber'];
+        var pickTheme = themes[now.getSeconds() % themes.length];
+        var newId = vnStr + '_QUEUE';
+        shAdd.appendRow([newId, dateStr, 'SANG', newTopic, pickTheme, '', '', 'CHO_TAO', '', '']);
+        tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+          text: '📥 Đã lưu chủ đề vào hàng đợi CHO_TAO trên Google Sheets:\n"' + newTopic + '"\n(Hệ thống sẽ tự động dựng vào ca tới, hoặc gõ /tao nếu muốn dựng ngay).'});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
+      // Lệnh /stats (báo cáo các video đã xuất bản)
+      if (txt.indexOf('/stats') === 0) {
+        var rows = getSheet_().getDataRange().getValues();
+        var sCount = {SANG: 0, TRUA: 0, TOI: 0};
+        var recentPub = [];
+        for (var k = 1; k < rows.length; k++) {
+          if (String(rows[k][COL_STATUS - 1]) === 'DA_DANG') {
+            var slKey = String(rows[k][COL_SLOT - 1] || 'SANG').toUpperCase();
+            sCount[slKey] = (sCount[slKey] || 0) + 1;
+            var ref = String(rows[k][COL_REF - 1] || '');
+            var ytPart = ref.indexOf('|') > -1 ? ('https://youtube.com/shorts/' + ref.split('|')[1]) : '';
+            recentPub.push('• ' + rows[k][COL_TOPIC - 1] + (ytPart ? '\n  ▶️ ' + ytPart : ''));
+          }
+        }
+        var totalPub = (sCount.SANG || 0) + (sCount.TRUA || 0) + (sCount.TOI || 0);
+        var last5 = recentPub.slice(-5).reverse();
+        tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+          text: '📈 THỐNG KÊ KÊNH & VIDEO ĐÃ ĐĂNG:\n'
+              + '• Tổng số video đã xuất bản: ' + totalPub + ' video\n'
+              + '  (Ca Sáng: ' + (sCount.SANG || 0) + ' | Ca Trưa: ' + (sCount.TRUA || 0) + ' | Ca Tối: ' + (sCount.TOI || 0) + ')\n\n'
+              + (last5.length ? '🎬 5 video xuất bản gần nhất:\n' + last5.join('\n') : 'Chưa có video nào ở trạng thái DA_DANG.')});
         dropPendingWebhook_();
         return ContentService.createTextOutput('ok');
       }
