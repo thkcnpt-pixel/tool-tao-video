@@ -25,7 +25,7 @@ class TelegramBot:
         return {"inline_keyboard": [
             [
                 {"text": "✅ Duyệt", "callback_data": f"APPROVE:{row_id}"},
-                {"text": "🔄 Tạo lại", "callback_data": f"APPROVE:REGEN:{row_id}"},
+                {"text": "🔄 Tạo lại", "callback_data": f"REGEN:{row_id}"},
                 {"text": "❌ Hủy", "callback_data": f"REJECT:{row_id}"},
             ]
         ]}
