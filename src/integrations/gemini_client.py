@@ -69,7 +69,7 @@ def fetch_tech_headlines(limit=8):
     return items[:limit]
 
 
-def build_prompt(topic, slot, recent, theme=None):
+def build_prompt(topic, slot, recent, theme=None, top_hooks=()):
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     voice = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
     return f"""Bạn là biên tập viên video ngắn tiếng Việt cho YouTube Shorts/TikTok (28-38 giây).
@@ -79,6 +79,9 @@ Chủ đề: {topic}
 
 Các chủ đề đã làm gần đây (KHÔNG lặp lại góc nhìn/nội dung):
 {avoid}
+
+Các video hiệu quả nhất của kênh để học phong cách giật tít Hook ngắn gọn, cuốn hút:
+{chr(10).join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"}
 
 Yêu cầu:
 - Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây (giữ nguyên tên khóa), không markdown.
@@ -159,10 +162,10 @@ def _call(model, prompt, key):
     return json.loads(text)
 
 
-def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries=2):
+def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries=2, top_hooks=()):
     """Sinh script.json hợp lệ. Thử lần lượt các model Free, retry khi JSON/schema sai."""
     key = api_key or os.environ["GEMINI_API_KEY"]
-    prompt = build_prompt(topic, slot, list(recent), theme)
+    prompt = build_prompt(topic, slot, list(recent), theme, top_hooks=top_hooks)
     last = None
     for model in MODELS:
         for attempt in range(retries + 1):

@@ -120,3 +120,5 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
 
 /* Robot */
 #robot { position: absolute; left: 0; top: 0; width: 140px; height: 160px; will-change: transform; }
+
+#watermark { position: absolute; left: var(--pad-left); bottom: 388px; font-size: 23px; font-weight: 700; color: rgba(255,255,255,0.42); letter-spacing: 1.5px; pointer-events: none; }

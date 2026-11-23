@@ -1,4 +1,5 @@
-"""Upload YouTube Shorts chế độ Private qua YouTube Data API v3 (OAuth Refresh Token)."""
+"""Upload YouTube Shorts + Tự động lên lịch Công khai đúng khung giờ vàng (05:00/11:30/18:00 VN) + Tự đăng Top Comment + Đọc View Analytics."""
+import datetime
 import json
 import os
 import re
@@ -7,7 +8,19 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-YT_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+YT_SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
+VN = datetime.timezone(datetime.timedelta(hours=7))
+
+# Giờ vàng phát sóng theo ca (giờ, phút) theo giờ Việt Nam UTC+7
+SLOT_SCHEDULE_VN = {
+    "SANG": (5, 0),
+    "TRUA": (11, 30),
+    "TOI": (18, 0),
+}
 
 
 def _parse_client_secret():
@@ -21,7 +34,7 @@ def _parse_client_secret():
     raise RuntimeError("YOUTUBE_CLIENT_SECRET_JSON không phải JSON hợp lệ")
 
 
-def get_youtube_service():
+def get_youtube_service(scopes=None):
     rt = os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip()
     if not rt:
         raise RuntimeError("Thiếu YOUTUBE_REFRESH_TOKEN")
@@ -32,13 +45,29 @@ def get_youtube_service():
         client_id=cid,
         client_secret=csec,
         token_uri="https://oauth2.googleapis.com/token",
-        scopes=YT_SCOPES,
+        scopes=scopes or YT_SCOPES,
     )
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
+def next_golden_publish_at(slot=""):
+    """Tính mốc giờ vàng sắp tới (ISO 8601 UTC).
+    - Nếu thời điểm bấm Duyệt cách giờ vàng của ca đó trong khoảng [10 phút .. 8 tiếng] -> lên lịch (Scheduled) đúng giờ vàng.
+    - Nếu đã qua giờ vàng của ca đó (hoặc sát dưới 10 phút) -> trả None để đăng Công khai (Public) ngay lập tức!
+    """
+    now_vn = datetime.datetime.now(VN)
+    hm = SLOT_SCHEDULE_VN.get(str(slot).upper())
+    if not hm:
+        return None
+    target_vn = now_vn.replace(hour=hm[0], minute=hm[1], second=0, microsecond=0)
+    diff_min = (target_vn - now_vn).total_seconds() / 60.0
+    if 10 <= diff_min <= 480:
+        utc_dt = target_vn.astimezone(datetime.timezone.utc)
+        return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return None
+
+
 def _split_caption(caption, topic):
-    """Tách caption thành (title <= 100 ký tự có #Shorts, description)."""
     tags = re.findall(r"#\S+", caption)
     clean = re.sub(r"#\S+", "", caption).strip()
     first_sent = re.split(r"[.!?\n]", clean)[0].strip() or topic or "AI Shorts"
@@ -49,23 +78,74 @@ def _split_caption(caption, topic):
     return title[:100], desc.strip()
 
 
-def upload_short(video_path, caption, topic="", privacy="private", publish_at=None):
-    """Upload video lên YouTube ở chế độ Private. Trả về URL YouTube Shorts."""
-    yt = get_youtube_service()
+def post_top_comment(yt, video_id, comment_text):
+    """Tự động đăng 1 bình luận đầu tiên dưới video YouTube Shorts để tăng tương tác & chuyển đổi."""
+    try:
+        yt.commentThreads().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "videoId": video_id,
+                    "topLevelComment": {"snippet": {"textOriginal": comment_text}},
+                }
+            },
+        ).execute()
+        print(f"[youtube] đã tự động đăng bình luận đầu tiên trên video {video_id}")
+        return True
+    except Exception as ex:
+        print(f"[youtube] bỏ qua đăng bình luận ({ex!r})")
+        return False
+
+
+def fetch_video_views(video_ids):
+    """Đọc số lượt xem (viewCount) thực tế của danh sách video YouTube để Gemini học từ các bài nhiều view."""
+    if not video_ids:
+        return {}
+    try:
+        yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.readonly"])
+        res = yt.videos().list(part="statistics", id=",".join(video_ids[:50])).execute()
+        out = {}
+        for it in res.get("items", []):
+            st = it.get("statistics", {})
+            out[it["id"]] = int(st.get("viewCount", 0))
+        return out
+    except Exception as ex:
+        print(f"[youtube] bỏ qua đọc analytics ({ex!r})")
+        return {}
+
+
+def upload_short(video_path, caption, topic="", slot="", auto_public=True):
+    """Upload video lên YouTube Shorts:
+    - Nếu bấm Duyệt trước giờ vàng của ca -> tự động Lên lịch Công khai (Scheduled) đúng 05:00 / 11:30 / 18:00 giờ VN.
+    - Nếu bấm Duyệt sau giờ vàng của ca -> tự động bật Công khai (Public) ngay lập tức.
+    - Tự động đăng 1 bình luận đầu tiên dưới video.
+    """
+    yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.upload"])
     title, desc = _split_caption(caption, topic)
+    publish_at = next_golden_publish_at(slot) if auto_public else None
+    if not auto_public:
+        privacy = "private"
+    elif publish_at:
+        privacy = "private"  # YouTube API yêu cầu privacyStatus="private" kèm publishAt để Scheduled Public
+    else:
+        privacy = "public"
+
+    status_body = {
+        "privacyStatus": privacy,
+        "selfDeclaredMadeForKids": False,
+    }
+    if publish_at:
+        status_body["publishAt"] = publish_at
+
     body = {
         "snippet": {
             "title": title,
             "description": desc,
             "tags": list(dict.fromkeys(["Shorts", "AI", "CongNghe", "Gemini", "TikTok"] + [t.lstrip("#") for t in re.findall(r"#\w+", caption)]))[:15],
-            "categoryId": "28",  # Science & Technology
+            "categoryId": "28",
             "defaultLanguage": "vi",
         },
-        "status": {
-            "privacyStatus": privacy,
-            "selfDeclaredMadeForKids": False,
-            **({"publishAt": publish_at} if publish_at and privacy == "private" else {}),
-        },
+        "status": status_body,
     }
     media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True, chunksize=4 * 1024 * 1024)
     req = yt.videos().insert(part="snippet,status", body=body, media_body=media)
@@ -73,4 +153,12 @@ def upload_short(video_path, caption, topic="", privacy="private", publish_at=No
     while resp is None:
         _, resp = req.next_chunk()
     vid = resp["id"]
-    return f"https://youtube.com/shorts/{vid}"
+    mode_note = f"Scheduled Public ({publish_at})" if publish_at else privacy.upper()
+    print(f"[youtube] upload OK id={vid} mode={mode_note}")
+
+    # Tự động thử đăng bình luận đầu tiên
+    clean_line = re.sub(r"#\S+", "", caption).strip()
+    comment = f"📌 {clean_line}\n👉 Bạn đang dùng công cụ AI nào mỗi ngày? Bình luận bên dưới để mình chia sẻ thêm mẹo nhé!"
+    post_top_comment(yt, vid, comment)
+
+    return f"https://youtube.com/shorts/{vid}", mode_note

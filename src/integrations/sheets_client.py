@@ -70,3 +70,25 @@ class SheetsClient:
             data.append({"range": f"{TAB}!{c}{row}", "values": [[v]]})
         self.svc.values().batchUpdate(spreadsheetId=self.sheet_id,
                                       body={"valueInputOption": "RAW", "data": data}).execute()
+
+    def top_performing_hooks(self, n=3):
+        """Trả về danh sách các chủ đề/caption đã đăng (ưu tiên sắp theo lượt xem YouTube nếu có)."""
+        try:
+            from youtube_uploader import fetch_video_views
+        except Exception:
+            fetch_video_views = lambda ids: {}
+        published = [r for r in self.rows() if r["status"] == "DA_DANG" and r["topic"]]
+        yt_map = {}
+        for r in published:
+            ref = str(r.get("video_url_or_drive_id", ""))
+            if "|" in ref:
+                yt_map[ref.split("|", 1)[1]] = r
+        views = fetch_video_views(list(yt_map.keys())) if yt_map else {}
+        scored = []
+        for r in published:
+            ref = str(r.get("video_url_or_drive_id", ""))
+            yid = ref.split("|", 1)[1] if "|" in ref else ""
+            v = views.get(yid, 0)
+            scored.append((v, f"{r['topic']} (Caption: {r['caption'][:80]})" + (f" [{v} views]" if v else "")))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [x[1] for x in scored[:n]]

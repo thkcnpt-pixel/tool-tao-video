@@ -50,7 +50,7 @@ class TelegramBot:
 
     def send_final(self, video_path, caption, youtube_url=None):
         """Gửi bản final + caption sạch về Telegram để đăng tay TikTok 10s."""
-        extra = f"\n\n▶️ YouTube (Private): {youtube_url}" if youtube_url else ""
+        extra = f"\n\n▶️ YouTube Shorts: {youtube_url}" if youtube_url else ""
         with open(video_path, "rb") as f:
             msg = self._call(
                 "sendVideo",

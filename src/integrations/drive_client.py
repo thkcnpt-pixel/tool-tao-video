@@ -36,6 +36,7 @@ class DriveClient:
         return f["id"]
 
     def download(self, file_id, dest):
+        file_id = str(file_id).split("|")[0]
         req = self.svc.files().get_media(fileId=file_id, supportsAllDrives=True)
         with io.FileIO(dest, "wb") as fh:
             dl = MediaIoBaseDownload(fh, req, chunksize=8 * 1024 * 1024)

@@ -61,8 +61,9 @@ def main():
         yt_url = None
         if not a.skip_youtube:
             try:
-                yt_url = youtube_uploader.upload_short(mp4, row["caption"], row["topic"], privacy="private")
-                print(f"[youtube] upload Private OK: {yt_url}")
+                yt_res = youtube_uploader.upload_short(mp4, row["caption"], row["topic"], slot=row.get("slot", ""), auto_public=True)
+                yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
+                print(f"[youtube] upload OK ({yt_mode}): {yt_url}")
             except Exception as ex:
                 print(f"[youtube] CẢNH BÁO không upload được YouTube ({ex!r}) -> vẫn gửi bản final về Telegram")
 
@@ -77,7 +78,9 @@ def main():
         bot.cleanup_duplicate_replies(row.get("telegram_msg_id"), final_mid)
         print("[telegram] đã gửi bản final + caption sạch về Telegram")
 
-    sheets.update(r, status="DA_DANG")
+    yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""
+    new_ref = f"{drive_id}|{yt_id}" if yt_id and "|" not in drive_id else drive_id
+    sheets.update(r, status="DA_DANG", video_url_or_drive_id=new_ref)
     print(f"[sheets] dòng {r}: status=DA_DANG")
     return 0
 

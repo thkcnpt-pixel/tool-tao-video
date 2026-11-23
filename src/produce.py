@@ -84,7 +84,7 @@ def main():
     print(f"[produce] dòng {r}: {row['id']} | {row['topic']}")
 
     script = generate_script(row["topic"], row["slot"] or slot, sheets.recent_topics(15, exclude_row=r),
-                             theme=row["bg_theme"] or None)
+                             theme=row["bg_theme"] or None, top_hooks=sheets.top_performing_hooks(3))
     sheets.update(r, bg_theme=script["bg_theme"], script_json=json.dumps(script, ensure_ascii=False),
                   caption=script["caption"])
     print("[sheets] đã ghi script_json + caption")
