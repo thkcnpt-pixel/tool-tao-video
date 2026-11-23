@@ -63,6 +63,21 @@ class TelegramBot:
     def webhook_info(self):
         return self._call("getWebhookInfo")
 
+
+    def cleanup_duplicate_replies(self, approval_msg_id, final_msg_id):
+        """Xóa các tin nhắn '✅ Đã duyệt...' bị lặp nằm giữa (approval_msg_id + 1) và final_msg_id."""
+        try:
+            a_id = int(approval_msg_id)
+            f_id = int(final_msg_id)
+        except Exception:
+            return
+        # Giữ lại duy nhất 1 tin báo "✅ Đã duyệt" đầu tiên (a_id + 1), xóa toàn bộ các tin lặp từ (a_id + 2) tới (f_id - 1)
+        for mid in range(a_id + 2, f_id):
+            try:
+                self._call("deleteMessage", data={"chat_id": self.chat_id, "message_id": mid}, timeout=10)
+            except Exception:
+                pass
+
     def clear_pending_webhook(self):
         """Xóa gói tin callback_query đang bị Telegram retry lặp lại do mã 302 Found của Google Apps Script."""
         info = self.webhook_info()

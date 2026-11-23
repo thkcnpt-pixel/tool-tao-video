@@ -66,13 +66,15 @@ def main():
             except Exception as ex:
                 print(f"[youtube] CẢNH BÁO không upload được YouTube ({ex!r}) -> vẫn gửi bản final về Telegram")
 
-        TelegramBot().send_final(
+        bot = TelegramBot()
+        final_mid = bot.send_final(
             mp4,
             f"🚀 BẢN FINAL ĐÃ DUYỆT ({row['id']})\n"
             f"📌 Tải video này đăng TikTok kèm nhạc trend (copy caption bên dưới):\n\n"
             f"{row['caption']}",
             youtube_url=yt_url,
         )
+        bot.cleanup_duplicate_replies(row.get("telegram_msg_id"), final_mid)
         print("[telegram] đã gửi bản final + caption sạch về Telegram")
 
     sheets.update(r, status="DA_DANG")
