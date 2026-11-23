@@ -1,9 +1,10 @@
 """Pipeline sản xuất: Sheets -> Gemini (tự sinh chủ đề nếu hết dòng CHO_TAO) -> render -> Drive -> Telegram -> Sheets.
 
 Dùng:
-  python src/produce.py                  # lấy dòng CHO_TAO theo ca hiện tại (hết thì tự sinh chủ đề mới)
-  python src/produce.py --slot SANG      # chỉ định ca
-  python src/produce.py --seed "chủ đề"  # thêm 1 dòng CHO_TAO với chủ đề này rồi chạy
+  python src/produce.py                        # lấy dòng CHO_TAO theo ca hiện tại (hết thì tự sinh chủ đề mới)
+  python src/produce.py --slot SANG            # chỉ định ca
+  python src/produce.py --seed "chủ đề"        # thêm 1 dòng CHO_TAO với chủ đề này rồi chạy
+  python src/produce.py --video-id 20261123... # tạo lại (regenerate) đúng dòng chỉ định
 """
 import argparse
 import datetime
@@ -26,7 +27,6 @@ VN = datetime.timezone(datetime.timedelta(hours=7))
 
 
 def current_vn_slot():
-    """Tự động xác định ca SANG / TRUA / TOI theo giờ Việt Nam hiện tại."""
     h = datetime.datetime.now(VN).hour
     if h < 8:
         return "SANG"
@@ -39,22 +39,40 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slot", choices=["SANG", "TRUA", "TOI"])
     ap.add_argument("--seed", help="thêm 1 dòng CHO_TAO với chủ đề này trước khi chạy")
+    ap.add_argument("--video-id", help="chỉ định id dòng cần dựng (hoặc dựng lại)")
     ap.add_argument("--output", default=str(ROOT / "output" / "output.mp4"))
     a = ap.parse_args()
 
     sheets = SheetsClient()
     sheets.ensure_tab()
+    try:
+        TelegramBot().clear_pending_webhook()
+    except Exception:
+        pass
+
     now = datetime.datetime.now(VN)
     slot = a.slot or current_vn_slot()
 
-    if a.seed:
-        sheets.add_row(id=f"{now:%Y%m%d_%H%M%S}_{slot}", date=f"{now:%Y-%m-%d}", slot=slot, topic=a.seed,
-                       status="CHO_TAO")
-        print(f"[sheets] đã thêm dòng CHO_TAO: {a.seed}")
+    row = None
+    if a.video_id:
+        for cand in sheets.rows():
+            if cand["id"] == a.video_id:
+                row = cand
+                break
 
-    row = sheets.next_pending(slot)
+    if not row and a.seed:
+        row_id = f"{now:%Y%m%d_%H%M%S}_{slot}"
+        sheets.add_row(id=row_id, date=f"{now:%Y-%m-%d}", slot=slot, topic=a.seed, status="CHO_TAO")
+        print(f"[sheets] đã thêm dòng CHO_TAO: {a.seed}")
+        for cand in sheets.rows():
+            if cand["id"] == row_id:
+                row = cand
+                break
+
     if not row:
-        # Tự động dùng Gemini sinh 1 chủ đề mới không trùng với 15 bài gần nhất
+        row = sheets.next_pending(slot)
+
+    if not row:
         recent = sheets.recent_topics(15)
         topic, theme = generate_topic(slot, recent)
         row_id = f"{now:%Y%m%d_%H%M%S}_{slot}"
@@ -65,7 +83,7 @@ def main():
     r = row["_row"]
     print(f"[produce] dòng {r}: {row['id']} | {row['topic']}")
 
-    script = generate_script(row["topic"], row["slot"], sheets.recent_topics(15, exclude_row=r),
+    script = generate_script(row["topic"], row["slot"] or slot, sheets.recent_topics(15, exclude_row=r),
                              theme=row["bg_theme"] or None)
     sheets.update(r, bg_theme=script["bg_theme"], script_json=json.dumps(script, ensure_ascii=False),
                   caption=script["caption"])

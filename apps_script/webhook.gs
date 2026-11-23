@@ -1,10 +1,16 @@
 /**
- * Google Apps Script Web App — Trạm nhận Webhook Telegram 24/7 miễn phí (có LockService + chống duyệt trùng 100%).
+ * Google Apps Script Web App — Trạm điều khiển Telegram 24/7 miễn phí.
+ * Hỗ trợ:
+ *   - Nút [✅ Duyệt] / [🔄 Tạo lại] / [❌ Hủy]
+ *   - Reply vào video để sửa caption
+ *   - Lệnh chat trực tiếp:
+ *       /tao <chủ đề>   -> tạo ngay video mới theo chủ đề bạn gõ
+ *       /tao            -> tạo ngay 1 video mới từ lịch CHO_TAO (hoặc AI tự nghĩ chủ đề)
+ *       /lich           -> xem thống kê số bài chờ tạo / chờ duyệt / đã đăng
  */
 var DEFAULT_SHEET_ID = '1ZXl4mwJ3XWA_L428OG78LK1olhrWEpqptlwhx6CKxNo';
 var TAB = 'Schedule';
-// Cột (1-based): 1:id 2:date 3:slot 4:topic 5:bg_theme 6:script_json 7:caption 8:status 9:telegram_msg_id 10:video_url_or_drive_id
-var COL_ID = 1, COL_CAPTION = 7, COL_STATUS = 8, COL_MSG_ID = 9;
+var COL_ID = 1, COL_TOPIC = 4, COL_CAPTION = 7, COL_STATUS = 8, COL_MSG_ID = 9;
 
 function getSheet_() {
   var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID') || DEFAULT_SHEET_ID;
@@ -29,8 +35,7 @@ function tg_(method, payload) {
 }
 
 function dropPendingWebhook_() {
-  var p = PropertiesService.getScriptProperties();
-  var token = p.getProperty('TELEGRAM_BOT_TOKEN');
+  var token = PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN');
   var url = ScriptApp.getService().getUrl();
   if (!token || !url) return;
   UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
@@ -40,17 +45,16 @@ function dropPendingWebhook_() {
   });
 }
 
-function dispatchPublish_(rowId) {
+function dispatchWorkflow_(wfName, inputs) {
   var p = PropertiesService.getScriptProperties();
   var pat = p.getProperty('GITHUB_PAT');
   var repo = p.getProperty('GITHUB_REPO') || 'thkcnpt-pixel/tool-tao-video';
-  var wf = p.getProperty('GITHUB_WORKFLOW') || 'publish_video.yml';
   if (!pat) return false;
-  var url = 'https://api.github.com/repos/' + repo + '/actions/workflows/' + wf + '/dispatches';
+  var url = 'https://api.github.com/repos/' + repo + '/actions/workflows/' + wfName + '/dispatches';
   var res = UrlFetchApp.fetch(url, {
     method: 'post', contentType: 'application/json',
     headers: {'Authorization': 'Bearer ' + pat, 'Accept': 'application/vnd.github+json'},
-    payload: JSON.stringify({ref: 'main', inputs: {video_id: String(rowId)}}),
+    payload: JSON.stringify({ref: 'main', inputs: inputs || {}}),
     muteHttpExceptions: true
   });
   return res.getResponseCode() === 204;
@@ -61,19 +65,16 @@ function doPost(e) {
     var update = JSON.parse(e.postData.contents);
     var allow = String(PropertiesService.getScriptProperties().getProperty('TELEGRAM_CHAT_ID') || '');
 
-    // 1) Bấm nút [✅ Duyệt] / [❌ Hủy]
+    // 1) Bấm nút [✅ Duyệt] / [🔄 Tạo lại] / [❌ Hủy]
     if (update.callback_query) {
       var cb = update.callback_query;
       var chatId = String(cb.message.chat.id);
       if (allow && chatId !== allow) return ContentService.createTextOutput('forbidden');
 
-      // Trả lời Telegram NGAY LẬP TỨC để tắt vòng xoay trên nút & ngăn Telegram retry
       tg_('answerCallbackQuery', {callback_query_id: cb.id, text: 'Đang xử lý...'});
 
-      // Khóa đồng bộ (LockService) chống 2 request chạy song song khi bấm nhiều lần
       var lock = LockService.getScriptLock();
       if (!lock.tryLock(10000)) return ContentService.createTextOutput('busy');
-
       try {
         var parts = String(cb.data || '').split(':');
         var action = parts[0], rowId = parts.slice(1).join(':');
@@ -82,22 +83,29 @@ function doPost(e) {
 
         var sh = getSheet_();
         var curStatus = String(sh.getRange(r, COL_STATUS).getValue() || '');
-
-        // CHỐNG LẶP TUYỆT ĐỐI: chỉ xử lý nếu dòng đó đang ở trạng thái CHO_DUYET!
         if (curStatus !== 'CHO_DUYET') {
           tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
                                          reply_markup: {inline_keyboard: []}});
+          dropPendingWebhook_();
           return ContentService.createTextOutput('already_processed');
         }
 
         if (action === 'APPROVE') {
           sh.getRange(r, COL_STATUS).setValue('DA_DUYET');
-          SpreadsheetApp.flush(); // ghi xuống Sheet ngay trước khi gọi GitHub
+          SpreadsheetApp.flush();
           tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
                                          reply_markup: {inline_keyboard: []}});
-          var ok = dispatchPublish_(rowId);
+          var ok = dispatchWorkflow_('publish_video.yml', {video_id: String(rowId)});
           tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
-            text: '✅ Đã duyệt ' + rowId + (ok ? ' — đã gọi GitHub Actions publish_video.' : ' — đã lưu DA_DUYET.')});
+            text: '✅ Đã duyệt ' + rowId + (ok ? ' — đang đăng YouTube Shorts & xuất bản Final...' : ' — đã lưu DA_DUYET.')});
+        } else if (action === 'REGEN') {
+          sh.getRange(r, COL_STATUS).setValue('CHO_TAO');
+          SpreadsheetApp.flush();
+          tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
+                                         reply_markup: {inline_keyboard: []}});
+          var okR = dispatchWorkflow_('produce_video.yml', {video_id: String(rowId)});
+          tg_('sendMessage', {chat_id: chatId, reply_to_message_id: cb.message.message_id,
+            text: '🔄 Đang dựng lại kịch bản & video mới cho ' + rowId + ' (~3 phút)...'});
         } else if (action === 'REJECT') {
           sh.getRange(r, COL_STATUS).setValue('DA_HUY');
           SpreadsheetApp.flush();
@@ -113,18 +121,59 @@ function doPost(e) {
       return ContentService.createTextOutput('ok');
     }
 
-    // 2) Reply vào tin nhắn video để sửa caption
-    if (update.message && update.message.reply_to_message && update.message.text) {
+    // 2) Tin nhắn văn bản: Lệnh /tao, /lich hoặc Reply sửa caption
+    if (update.message && update.message.text) {
       var m = update.message;
       var mChat = String(m.chat.id);
       if (allow && mChat !== allow) return ContentService.createTextOutput('forbidden');
-      var replyId = String(m.reply_to_message.message_id);
-      var row = findRow_(COL_MSG_ID, replyId);
-      if (row > 0) {
-        getSheet_().getRange(row, COL_CAPTION).setValue(m.text.trim());
+      var txt = m.text.trim();
+
+      // Lệnh /tao <chủ đề>
+      if (txt.indexOf('/tao') === 0) {
+        var topic = txt.replace(/^\/tao(@\S+)?\s*/i, '').trim();
+        var inputs = topic ? {seed_topic: topic} : {};
+        var okT = dispatchWorkflow_('produce_video.yml', inputs);
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
-          text: '✏️ Đã cập nhật caption mới vào Google Sheets. Bạn có thể bấm ✅ Duyệt ở tin nhắn video.'});
+          text: okT
+            ? ('🎬 Đã kích hoạt dựng video' + (topic ? ' cho chủ đề:\n"' + topic + '"' : ' từ lịch CHO_TAO') + '\n⏳ Chờ khoảng 3 phút bot sẽ gửi video về duyệt!')
+            : '⚠️ Không gọi được GitHub Actions (kiểm tra GITHUB_PAT).'});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
       }
+
+      // Lệnh /lich
+      if (txt.indexOf('/lich') === 0) {
+        var data = getSheet_().getDataRange().getValues();
+        var cChoTao = 0, cChoDuyet = 0, cDaDang = 0, nextTopics = [];
+        for (var i = 1; i < data.length; i++) {
+          var st = String(data[i][COL_STATUS - 1]);
+          if (st === 'CHO_TAO') {
+            cChoTao++;
+            if (nextTopics.length < 3) nextTopics.push('• ' + data[i][COL_TOPIC - 1]);
+          } else if (st === 'CHO_DUYET') cChoDuyet++;
+          else if (st === 'DA_DANG') cDaDang++;
+        }
+        tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+          text: '📊 Trạng thái lịch Google Sheets:\n'
+              + '• Chờ tạo (CHO_TAO): ' + cChoTao + ' bài\n'
+              + '• Chờ duyệt (CHO_DUYET): ' + cChoDuyet + ' bài\n'
+              + '• Đã đăng (DA_DANG): ' + cDaDang + ' bài\n\n'
+              + (nextTopics.length ? '📌 3 chủ đề sắp tới:\n' + nextTopics.join('\n') : '✨ Khi hết CHO_TAO, AI sẽ tự săn tin & sinh chủ đề mới!')});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
+      // Reply vào tin nhắn video để sửa caption
+      if (m.reply_to_message) {
+        var replyId = String(m.reply_to_message.message_id);
+        var row = findRow_(COL_MSG_ID, replyId);
+        if (row > 0) {
+          getSheet_().getRange(row, COL_CAPTION).setValue(txt);
+          tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+            text: '✏️ Đã cập nhật caption mới vào Google Sheets. Bạn có thể bấm ✅ Duyệt ở tin nhắn video.'});
+        }
+      }
+      dropPendingWebhook_();
     }
   } catch (err) {
     console.error(err);

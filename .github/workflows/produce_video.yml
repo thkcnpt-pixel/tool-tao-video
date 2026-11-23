@@ -11,13 +11,21 @@ on:
   workflow_dispatch:
     inputs:
       slot:
-        description: "Ca phát sóng (SANG / TRUA / TOI - để trống sẽ lấy dòng CHO_TAO đầu tiên)"
+        description: "Ca phát sóng (SANG / TRUA / TOI - để trống sẽ lấy theo giờ hiện tại)"
         required: false
         default: ""
       seed_topic:
         description: "Thêm nhanh 1 chủ đề CHO_TAO mới trước khi chạy (tùy chọn)"
         required: false
         default: ""
+      video_id:
+        description: "ID dòng cần tạo lại (dùng cho nút Tạo lại từ Telegram)"
+        required: false
+        default: ""
+
+concurrency:
+  group: produce-video-${{ github.event.inputs.video_id || github.event.inputs.seed_topic || 'cron' }}
+  cancel-in-progress: false
 
 jobs:
   produce:
@@ -55,6 +63,9 @@ jobs:
           ARGS=""
           if [ -n "${{ github.event.inputs.slot }}" ]; then
             ARGS="$ARGS --slot ${{ github.event.inputs.slot }}"
+          fi
+          if [ -n "${{ github.event.inputs.video_id }}" ]; then
+            ARGS="$ARGS --video-id \"${{ github.event.inputs.video_id }}\""
           fi
           if [ -n "${{ github.event.inputs.seed_topic }}" ]; then
             ARGS="$ARGS --seed \"${{ github.event.inputs.seed_topic }}\""

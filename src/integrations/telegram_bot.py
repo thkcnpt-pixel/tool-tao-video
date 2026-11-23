@@ -1,4 +1,4 @@
-"""Telegram Bot API: gửi video chờ duyệt + bản final đăng TikTok + quản lý webhook."""
+"""Telegram Bot API: gửi video chờ duyệt (kèm nút Duyệt / Tạo lại / Hủy) + bản final đăng TikTok + quản lý webhook."""
 import argparse
 import json
 import os
@@ -22,16 +22,19 @@ class TelegramBot:
 
     @staticmethod
     def approval_keyboard(row_id):
-        return {"inline_keyboard": [[
-            {"text": "✅ Duyệt", "callback_data": f"APPROVE:{row_id}"},
-            {"text": "❌ Hủy", "callback_data": f"REJECT:{row_id}"},
-        ]]}
+        return {"inline_keyboard": [
+            [
+                {"text": "✅ Duyệt", "callback_data": f"APPROVE:{row_id}"},
+                {"text": "🔄 Tạo lại", "callback_data": f"REGEN:{row_id}"},
+                {"text": "❌ Hủy", "callback_data": f"REJECT:{row_id}"},
+            ]
+        ]}
 
     def send_for_approval(self, video_path, row_id, topic, caption, drive_id=""):
         text = (f"🎬 <b>Chờ duyệt:</b> <code>{row_id}</code>\n"
                 f"📌 <b>Chủ đề:</b> {topic}\n\n"
                 f"📝 <b>Caption:</b>\n{caption}\n\n"
-                f"<i>💡 Reply trực tiếp tin nhắn này để sửa caption trước khi bấm Duyệt.</i>")
+                f"<i>💡 Reply tin nhắn này để sửa caption, hoặc bấm 🔄 Tạo lại để dựng kịch bản khác.</i>")
         if drive_id:
             text += f"\n🔗 <a href=\"https://drive.google.com/file/d/{drive_id}/view\">Xem trên Drive</a>"
         with open(video_path, "rb") as f:

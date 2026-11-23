@@ -6,7 +6,9 @@
 </head>
 <body>
 <div id="root">
+  <div id="topbar"><div id="prog"></div></div>
   <div id="badge"></div>
+  <div id="seg-idx"></div>
   <div id="stage"></div>
   <div id="sub"></div>
   <svg id="robot" viewBox="0 0 140 160" xmlns="http://www.w3.org/2000/svg">
@@ -15,15 +17,11 @@
       <linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cbd5e1"/></linearGradient>
     </defs>
     <ellipse id="jet" cx="72" cy="150" rx="26" ry="9" fill="url(#glow)"/>
-    <!-- ăng-ten -->
     <line x1="72" y1="18" x2="72" y2="34" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round"/>
     <circle id="ant" cx="72" cy="14" r="7" fill="#38bdf8"/><circle cx="72" cy="14" r="12" fill="url(#glow)"/>
-    <!-- thân -->
     <rect x="48" y="104" width="50" height="38" rx="19" fill="url(#body)"/>
-    <!-- cánh tay chỉ hướng (sang trái) -->
     <g id="arm"><path d="M52 118 Q30 114 12 104" stroke="#e2e8f0" stroke-width="10" stroke-linecap="round" fill="none"/><circle cx="10" cy="103" r="7" fill="#fff"/></g>
     <path d="M96 118 Q108 124 112 134" stroke="#e2e8f0" stroke-width="10" stroke-linecap="round" fill="none"/>
-    <!-- đầu -->
     <rect x="24" y="30" width="96" height="78" rx="34" fill="url(#body)"/>
     <rect x="34" y="42" width="76" height="54" rx="24" fill="#0b1224"/>
     <ellipse cx="46" cy="82" rx="7" ry="4.5" fill="#fb7185" opacity=".55"/><ellipse cx="98" cy="82" rx="7" ry="4.5" fill="#fb7185" opacity=".55"/>
@@ -40,7 +38,16 @@ const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const easeOut = (u) => 1 - Math.pow(1 - u, 3);
 const rise = (t, at, d = 0.35) => clamp((t - at) / d);
 
-/* ---- Biểu cảm robot ---- */
+/* Hiệu ứng đếm số chạy (Counter Animation): vd "70%" -> chạy 0%..70%, "10X" -> 0X..10X */
+function formatCounter(raw, progress) {
+  const s = String(raw ?? '');
+  const m = s.match(/^([+-]?\d+(?:[.,]\d+)?)(.*)$/);
+  if (!m || progress >= 1) return s;
+  const num = parseFloat(m[1].replace(',', '.'));
+  const cur = Math.round(num * easeOut(clamp(progress)));
+  return cur + m[2];
+}
+
 const EYES = {
   amazed: '<circle cx="56" cy="68" r="11" stroke-width="0"/><circle cx="88" cy="68" r="11" stroke-width="0"/><circle cx="59" cy="65" r="3.5" fill="#0b1224" stroke-width="0"/><circle cx="91" cy="65" r="3.5" fill="#0b1224" stroke-width="0"/>',
   curious: '<ellipse cx="56" cy="68" rx="8" ry="10" stroke-width="0"/><ellipse cx="88" cy="68" rx="8" ry="10" stroke-width="0"/><circle cx="52" cy="66" r="3" fill="#0b1224" stroke-width="0"/><circle cx="84" cy="66" r="3" fill="#0b1224" stroke-width="0"/>',
@@ -51,11 +58,10 @@ const EYES = {
 let curExpr = '';
 function setExpr(e) { if (e !== curExpr) { document.getElementById('eyes').innerHTML = EYES[e]; curExpr = e; } }
 
-/* ---- Dựng từng cảnh ---- */
 function build(seg, idx) {
   const el = $('<div class="seg"></div>');
-  const d = seg.data, wp = [];           // wp: [{frac, el, expr}]
-  const R = [];                          // reveal: [el, fracStart]
+  const d = seg.data, wp = [];
+  const R = [];
   const add = (node, at) => { node.classList.add('reveal'); el.appendChild(node); R.push([node, at]); return node; };
   seg.R = R; seg.wp = wp;
   if (seg.type === 'hook') {
@@ -71,6 +77,16 @@ function build(seg, idx) {
     const a = add($(`<div class="glass ai-card"><div class="label">Phản hồi tự động</div><div class="text">${esc(d.ai_reply)}</div></div>`), 0.55);
     seg.typed = u.querySelector('.typed'); seg.caret = u.querySelector('.caret');
     wp.push({ frac: 0.08, get: () => u, expr: 'curious' }, { frac: 0.55, get: () => a, expr: 'happy' });
+  } else if (seg.type === 'prompt_card') {
+    add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
+    const box = add($(`<div class="term-box"><div class="term-bar"><div class="term-dots"><i></i><i></i><i></i></div><div class="copy-pill">📋 Giữ màn hình lưu Prompt</div></div><div class="term-body">“${esc(d.prompt_text)}”</div></div>`), 0.08);
+    const tip = add($(`<div class="term-tip">✨ Kết quả: ${esc(d.result_note || 'Chuẩn xác & tiết kiệm 10x thời gian')}</div>`), 0.52);
+    wp.push({ frac: 0.08, get: () => box, expr: 'curious' }, { frac: 0.52, get: () => tip, expr: 'happy' });
+  } else if (seg.type === 'myth_vs_fact') {
+    add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
+    const m = add($(`<div class="myth-card"><div class="label">❌ Sai lầm phổ biến</div><div class="text">${esc(d.myth)}</div></div>`), 0.08);
+    const f = add($(`<div class="fact-card"><div class="label">✅ Cách làm thông minh</div><div class="text">${esc(d.fact)}</div></div>`), 0.48);
+    wp.push({ frac: 0.08, get: () => m, expr: 'amazed' }, { frac: 0.48, get: () => f, expr: 'happy' });
   } else if (seg.type === 'comparison') {
     add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
     add($(`<div class="cmp-head"><div>${esc(d.left_title)}</div><div>${esc(d.right_title)}</div></div>`), 0.06);
@@ -84,9 +100,10 @@ function build(seg, idx) {
   } else if (seg.type === 'stat_card') {
     add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
     const m = add($(`<div class="metric-wrap glass"><div class="metric">${esc(d.metric)}</div><div class="text">${esc(d.summary)}</div></div>`), 0.06);
+    seg.metricEl = m.querySelector('.metric'); seg.metricRaw = d.metric;
     seg.bl = [];
     (d.bullets || []).forEach((b, i) => { const n = add($(`<div class="bullet">${esc(b)}</div>`), 0.5 + i * 0.12); seg.bl.push({ el: n, start: 0.5 + i * 0.2 }); });
-    wp.push({ frac: 0.06, get: () => m.querySelector('.metric'), expr: 'amazed' });
+    wp.push({ frac: 0.06, get: () => seg.metricEl, expr: 'amazed' });
     if (seg.bl.length) wp.push({ frac: 0.5, get: () => seg.bl[0].el, expr: 'amazed' });
   } else if (seg.type === 'bullet_steps') {
     add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
@@ -100,8 +117,9 @@ function build(seg, idx) {
     });
   } else if (seg.type === 'cta') {
     const m = add($(`<div class="metric-wrap glass"><div class="metric">${esc(d.highlight_metric)}</div><div class="text">${esc(d.summary)}</div></div>`), 0.05);
+    seg.metricEl = m.querySelector('.metric'); seg.metricRaw = d.highlight_metric;
     const b = add($(`<div class="cta-btn">👇 ${esc(d.button_text)}</div>`), 0.4);
-    wp.push({ frac: 0.05, get: () => m.querySelector('.metric'), expr: 'amazed' }, { frac: 0.45, get: () => b, expr: 'wink' });
+    wp.push({ frac: 0.05, get: () => seg.metricEl, expr: 'amazed' }, { frac: 0.45, get: () => b, expr: 'wink' });
   }
   document.getElementById('stage').appendChild(el);
   return el;
@@ -114,13 +132,13 @@ function init(tl) {
   document.getElementById('badge').style.display = tl.badge ? 'block' : 'none';
   document.getElementById('robot').style.display = tl.mascot === false ? 'none' : 'block';
   segEls = T.segments.map((s, i) => build(s, i));
-  segEls.forEach(e => e.style.opacity = 1);   // bật tạm để đo layout
+  segEls.forEach(e => e.style.opacity = 1);
   wps = [];
   T.segments.forEach((s, i) => {
     s.wp.forEach(w => {
       const rs = w.get().getClientRects(); const r = rs[rs.length - 1];
       const x = Math.min(r.right + 14, ROBOT_MAX_X);
-      const y = r.top + r.height / 2 - 98;   // tay ở ~ 63% chiều cao robot => chỉ đúng giữa phần tử
+      const y = r.top + r.height / 2 - 98;
       wps.push({ t: s.start + w.frac * s.dur, x, y: Math.max(y, 260), expr: w.expr });
     });
   });
@@ -128,7 +146,6 @@ function init(tl) {
   return wps.length;
 }
 
-/* ---- Vị trí robot theo thời gian (ease-out + nhún) ---- */
 function robotAt(t) {
   let i = -1;
   for (let k = 0; k < wps.length; k++) if (wps[k].t <= t) i = k;
@@ -138,16 +155,21 @@ function robotAt(t) {
   const u = i === 0 && t < cur.t ? 0 : easeOut(clamp((t - cur.t) / FLY));
   let x = prev.x + (cur.x - prev.x) * u, y = prev.y + (cur.y - prev.y) * u;
   const flying = u < 1 ? Math.sin(Math.PI * u) : 0;
-  y += 7 * Math.sin(2 * Math.PI * t * 1.3) - 14 * flying;   // nhún nhẹ
+  y += 7 * Math.sin(2 * Math.PI * t * 1.3) - 14 * flying;
   return { x, y, expr: cur.expr, tilt: -8 * flying };
 }
 
 function seek(t) {
+  // Progress bar & bộ đếm cảnh
+  document.getElementById('prog').style.width = `${clamp(t / (T.total || 1)) * 100}%`;
   let si = T.segments.findIndex(s => t >= s.start && t < s.start + s.dur);
   if (si < 0) si = T.segments.length - 1;
+  document.getElementById('seg-idx').textContent = `${si + 1}/${T.segments.length}`;
+
   const s = T.segments[si], lt = t - s.start, p = lt / s.dur;
   segEls.forEach((e, i) => e.style.opacity = i === si ? clamp(Math.min(lt / 0.2, (s.dur - lt) / 0.15)) : 0);
   s.R.forEach(([n, at]) => n.style.opacity = rise(p, at, 0.06));
+  if (s.metricEl) s.metricEl.textContent = formatCounter(s.metricRaw, (lt - 0.1) / 0.65);
   if (s.typed) {
     const full = s.data.user_prompt, k = clamp((p - 0.12) / 0.38);
     s.typed.textContent = full.slice(0, Math.round(full.length * k));
@@ -156,7 +178,8 @@ function seek(t) {
   if (s.rows) s.rows.forEach(r => r.el.classList.toggle('active', p >= r.start && p < r.end));
   if (s.st) s.st.forEach(r => r.el.classList.toggle('active', p >= r.start && p < r.end));
   if (s.bl) s.bl.forEach(r => r.el.classList.toggle('active', p >= r.start));
-  // phụ đề Karaoke từng từ
+
+  // Phụ đề Karaoke từng từ
   const sub = document.getElementById('sub');
   const c = (s.subs || []).find(c => lt >= c.s && lt < c.e);
   if (c) {
@@ -170,7 +193,8 @@ function seek(t) {
     }).join('');
     sub.style.opacity = 1;
   } else sub.style.opacity = 0;
-  // robot
+
+  // Robot
   const r = robotAt(t);
   const blink = (t % 3.2) > 3.08 && !['wink', 'happy'].includes(r.expr);
   setExpr(blink ? 'blink' : r.expr);

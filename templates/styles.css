@@ -1,4 +1,4 @@
-/* Glassmorphism tương phản cao + 4 theme + Phụ đề Karaoke từng từ + vùng an toàn 12%/20%/17% */
+/* Glassmorphism tương phản cao + 4 theme + Progress bar + 6 loại cảnh + Phụ đề Karaoke + vùng an toàn 12%/20%/17% */
 @font-face { font-family: "Be Vietnam Pro"; font-weight: 400; src: url("../assets/fonts/BeVietnamPro-Regular.ttf"); }
 @font-face { font-family: "Be Vietnam Pro"; font-weight: 600; src: url("../assets/fonts/BeVietnamPro-SemiBold.ttf"); }
 @font-face { font-family: "Be Vietnam Pro"; font-weight: 700; src: url("../assets/fonts/BeVietnamPro-Bold.ttf"); }
@@ -12,7 +12,7 @@
   --pad-left: 50px;
   --content-w: 700px;     /* x: 50..750 ; robot: 760..896 */
   --accent: #38bdf8; --accent2: #818cf8; --pop: #fde047;
-  --glass: rgba(5, 10, 26, 0.82); --glass-line: rgba(255,255,255,0.26);
+  --glass: rgba(5, 10, 26, 0.84); --glass-line: rgba(255,255,255,0.26);
 }
 .theme-cyber_blue    { --accent: #38bdf8; --accent2: #818cf8; --pop: #fde047; --glass: rgba(4, 10, 28, 0.84); }
 .theme-neon_purple   { --accent: #c084fc; --accent2: #22d3ee; --pop: #facc15; --glass: rgba(14, 4, 30, 0.84); }
@@ -24,9 +24,18 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
   font-family: "Be Vietnam Pro", "Inter", "Noto Sans", sans-serif; color: #fff; }
 #root { position: relative; width: var(--W); height: var(--H); }
 
-#badge { position: absolute; left: var(--pad-left); top: var(--safe-top); padding: 12px 28px; border-radius: 999px;
-  font-weight: 800; font-size: 30px; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent), var(--accent2));
+/* Thanh tiến trình (Progress Bar) & bộ đếm cảnh ở ngay mép trên vùng an toàn */
+#topbar { position: absolute; left: var(--pad-left); top: 234px; width: 790px; height: 10px;
+  background: rgba(255,255,255,0.14); border-radius: 999px; overflow: hidden; }
+#prog { height: 100%; width: 0%; background: linear-gradient(90deg, var(--pop), var(--accent));
+  box-shadow: 0 0 18px var(--accent); border-radius: 999px; }
+
+#badge { position: absolute; left: var(--pad-left); top: 258px; padding: 12px 28px; border-radius: 999px;
+  font-weight: 800; font-size: 29px; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent), var(--accent2));
   color: #030b18; box-shadow: 0 6px 26px rgba(0,0,0,.55); }
+#seg-idx { position: absolute; left: 640px; top: 262px; padding: 10px 22px; border-radius: 999px;
+  font-weight: 800; font-size: 26px; background: rgba(5, 10, 26, 0.78); border: 2px solid var(--glass-line);
+  color: var(--pop); }
 
 .seg { position: absolute; left: var(--pad-left); top: 345px; width: var(--content-w); height: 975px; opacity: 0;
   display: flex; flex-direction: column; justify-content: center; gap: 22px; }
@@ -44,6 +53,30 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
 /* Chat */
 .ai-card { border-color: var(--accent); box-shadow: 0 0 36px rgba(56,189,248,.35), 0 14px 44px rgba(0,0,0,.65); }
 .caret { display: inline-block; width: 4px; height: 38px; background: var(--accent); vertical-align: middle; margin-left: 4px; }
+
+/* Prompt Card (Cửa sổ câu lệnh có nút Copy Prompt kích thích Pause/Save) */
+.term-box { background: rgba(3, 7, 20, 0.92); border: 2.5px solid var(--accent); border-radius: 34px; overflow: hidden;
+  box-shadow: 0 0 40px rgba(56,189,248,.3), 0 14px 44px rgba(0,0,0,.75); }
+.term-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 26px;
+  background: rgba(255,255,255,0.08); border-bottom: 2px solid rgba(255,255,255,0.15); }
+.term-dots { display: flex; gap: 10px; }
+.term-dots i { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
+.term-dots i:nth-child(1) { background: #fb7185; }
+.term-dots i:nth-child(2) { background: #facc15; }
+.term-dots i:nth-child(3) { background: #34d399; }
+.copy-pill { padding: 8px 20px; border-radius: 999px; font-size: 23px; font-weight: 800;
+  background: linear-gradient(90deg, var(--pop), var(--accent)); color: #030b18; }
+.term-body { padding: 28px 30px; font-size: 36px; font-weight: 700; line-height: 1.38; color: #f8fafc; }
+.term-tip { padding: 20px 28px; border-radius: 26px; background: var(--glass); border: 2px solid var(--pop);
+  font-size: 32px; font-weight: 700; color: var(--pop); }
+
+/* Myth vs Fact (Sai lầm ❌ vs Sự thật ✅) */
+.myth-card { background: rgba(45, 8, 22, 0.86); border: 2.5px solid #fb7185; border-radius: 34px; padding: 26px 30px;
+  box-shadow: 0 10px 36px rgba(0,0,0,.65); }
+.myth-card .label { color: #fda4af; }
+.fact-card { background: rgba(4, 38, 32, 0.90); border: 2.5px solid #34d399; border-radius: 34px; padding: 28px 30px;
+  box-shadow: 0 0 38px rgba(52,211,153,.35), 0 12px 40px rgba(0,0,0,.7); }
+.fact-card .label { color: #6ee7b7; }
 
 /* Comparison */
 .cmp-head, .cmp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -68,7 +101,7 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
 /* CTA */
 .cta-btn { width: max-content; max-width: 700px; padding: 26px 38px; border-radius: 999px; font-size: 34px; font-weight: 800; color: #030b18; background: linear-gradient(90deg, var(--pop), var(--accent)); box-shadow: 0 0 42px var(--accent); }
 
-/* Phụ đề Karaoke word-by-word: hộp kính tối sâu + từ đang đọc bật pill vàng/cyan nổi bật */
+/* Phụ đề Karaoke word-by-word */
 #sub { position: absolute; left: var(--pad-left); bottom: 410px; max-width: 790px; padding: 22px 30px; border-radius: 32px;
   background: rgba(3, 6, 18, 0.90); border: 2.5px solid rgba(255,255,255,0.28);
   box-shadow: 0 12px 40px rgba(0,0,0,0.8);
