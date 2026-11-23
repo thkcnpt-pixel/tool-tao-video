@@ -1,10 +1,9 @@
-"""Pipeline sản xuất (Giai đoạn 2): Sheets -> Gemini -> render -> Drive -> Sheets.
+"""Pipeline sản xuất: Sheets -> Gemini (tự sinh chủ đề nếu hết dòng CHO_TAO) -> render -> Drive -> Telegram -> Sheets.
 
 Dùng:
-  python src/produce.py                  # lấy dòng CHO_TAO đầu tiên
-  python src/produce.py --slot SANG      # ưu tiên đúng ca
-  python src/produce.py --seed "chủ đề"  # thêm 1 dòng CHO_TAO mẫu rồi chạy
-Telegram (status CHO_DUYET) sẽ nối ở Giai đoạn 3.
+  python src/produce.py                  # lấy dòng CHO_TAO theo ca hiện tại (hết thì tự sinh chủ đề mới)
+  python src/produce.py --slot SANG      # chỉ định ca
+  python src/produce.py --seed "chủ đề"  # thêm 1 dòng CHO_TAO với chủ đề này rồi chạy
 """
 import argparse
 import datetime
@@ -18,12 +17,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "integrations"))
 
 import render_video  # noqa: E402
 from drive_client import DriveClient  # noqa: E402
-from gemini_client import generate_script  # noqa: E402
+from gemini_client import generate_script, generate_topic  # noqa: E402
 from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 VN = datetime.timezone(datetime.timedelta(hours=7))
+
+
+def current_vn_slot():
+    """Tự động xác định ca SANG / TRUA / TOI theo giờ Việt Nam hiện tại."""
+    h = datetime.datetime.now(VN).hour
+    if h < 8:
+        return "SANG"
+    if h < 15:
+        return "TRUA"
+    return "TOI"
 
 
 def main():
@@ -35,21 +44,28 @@ def main():
 
     sheets = SheetsClient()
     sheets.ensure_tab()
+    now = datetime.datetime.now(VN)
+    slot = a.slot or current_vn_slot()
+
     if a.seed:
-        now = datetime.datetime.now(VN)
-        slot = a.slot or "SANG"
         sheets.add_row(id=f"{now:%Y%m%d_%H%M%S}_{slot}", date=f"{now:%Y-%m-%d}", slot=slot, topic=a.seed,
                        status="CHO_TAO")
         print(f"[sheets] đã thêm dòng CHO_TAO: {a.seed}")
 
-    row = sheets.next_pending(a.slot)
+    row = sheets.next_pending(slot)
     if not row:
-        print("[produce] không có dòng CHO_TAO nào")
-        return 0
+        # Tự động dùng Gemini sinh 1 chủ đề mới không trùng với 15 bài gần nhất
+        recent = sheets.recent_topics(15)
+        topic, theme = generate_topic(slot, recent)
+        row_id = f"{now:%Y%m%d_%H%M%S}_{slot}"
+        sheets.add_row(id=row_id, date=f"{now:%Y-%m-%d}", slot=slot, topic=topic, bg_theme=theme, status="CHO_TAO")
+        print(f"[sheets] hết dòng CHO_TAO -> đã tự động tạo dòng mới: {row_id} | {topic}")
+        row = sheets.next_pending(slot)
+
     r = row["_row"]
     print(f"[produce] dòng {r}: {row['id']} | {row['topic']}")
 
-    script = generate_script(row["topic"], row["slot"], sheets.recent_topics(10, exclude_row=r),
+    script = generate_script(row["topic"], row["slot"], sheets.recent_topics(15, exclude_row=r),
                              theme=row["bg_theme"] or None)
     sheets.update(r, bg_theme=script["bg_theme"], script_json=json.dumps(script, ensure_ascii=False),
                   caption=script["caption"])
@@ -57,7 +73,7 @@ def main():
 
     drive = DriveClient()
     with tempfile.TemporaryDirectory() as tmp:
-        music = drive.random_music(tmp)  # None -> render_video fallback assets/music/
+        music = drive.random_music(tmp)
         render_video.render(script, a.output, music=music)
         vid = drive.upload(a.output, name=f"{row['id']}.mp4")
         print(f"[drive] upload OK drive_file_id={vid}")

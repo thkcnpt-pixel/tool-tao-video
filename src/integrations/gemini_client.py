@@ -136,3 +136,27 @@ def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries
                     break  # model không dùng được -> đổi model
                 time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"Gemini không sinh được script hợp lệ: {last}")
+
+
+def generate_topic(slot, recent=(), api_key=None):
+    """Tự động nghĩ ra 1 chủ đề mới hấp dẫn theo ca (SANG/TRUA/TOI), không trùng với recent."""
+    key = api_key or os.environ["GEMINI_API_KEY"]
+    avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
+    prompt = f"""Bạn là biên tập viên kênh YouTube Shorts / TikTok về AI & Công nghệ năm 2026.
+Ca phát sóng: {slot} — {SLOT_HINT.get(slot, '')}
+Các chủ đề đã làm gần đây (TUYỆT ĐỐI KHÔNG TRÙNG LẶP):
+{avoid}
+
+Hãy đề xuất 1 chủ đề video ngắn (30-40 giây) mới mẻ, thực tế, dễ thu hút người xem Việt Nam.
+Trả về JSON đúng định dạng: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber"}}"""
+    for model in MODELS:
+        try:
+            res = _call(model, prompt, key)
+            topic = str(res.get("topic", "")).strip()
+            theme = res.get("bg_theme") if res.get("bg_theme") in THEMES else THEMES[0]
+            if topic:
+                print(f"[gemini] tự sinh chủ đề mới ({slot}): {topic}")
+                return topic, theme
+        except Exception as ex:
+            print(f"[gemini] generate_topic {model} lỗi: {ex}")
+    return f"Mẹo ứng dụng AI tiết kiệm thời gian ca {slot}", THEMES[0]
