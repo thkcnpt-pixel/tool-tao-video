@@ -1,4 +1,4 @@
-"""Gemini API (Free) sinh script.json chuẩn + tự săn tin RSS 0đ cho Ca Sáng + hỗ trợ 6 loại cảnh + đảo giọng Nam/Nữ."""
+"""Gemini API (Free) với 8 model dự phòng + Fallback Template chống lỗi 503 tuyệt đối + 8 loại cảnh + Slot-Aware CTA + Smart Pinned Question."""
 import json
 import os
 import time
@@ -6,11 +6,20 @@ import xml.etree.ElementTree as ET
 
 import requests
 
-MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"]
+# Chuỗi 8 model Free của Google AI Studio để khi 1-2 model bị 503 High Demand sẽ sang ngay model rảnh
+MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-omni-1.2-flash",
+    "gemini-flash-lite-latest",
+]
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 THEMES = ["cyber_blue", "neon_purple", "emerald_tech", "sunset_amber"]
 
-# Bộ lọc từ ngữ nhạy cảm thương mại tránh bị TikTok bóp tương tác (shadowban)
 TIKTOK_SAFE_REPLACEMENTS = [
     ("mua ngay", "trải nghiệm ngay"),
     ("bán tài khoản", "hỗ trợ nâng cấp"),
@@ -31,19 +40,29 @@ def sanitize_tiktok_text(text):
         out = out.replace(bad, good).replace(bad.capitalize(), good.capitalize())
     return out
 
-SCENE_TYPES = {"chat_demo", "comparison", "stat_card", "bullet_steps", "prompt_card", "myth_vs_fact"}
+
+SCENE_TYPES = {
+    "chat_demo", "comparison", "stat_card", "bullet_steps",
+    "prompt_card", "myth_vs_fact", "checklist_card", "ranking_card",
+}
 
 SLOT_HINT = {
-    "SANG": "Ca sáng: tin tức AI/công nghệ nhanh. Ưu tiên cảnh stat_card + myth_vs_fact.",
-    "TRUA": "Ca trưa: so sánh tính năng/chia sẻ giá trị, lồng ghép khéo léo dịch vụ (ví dụ gói Gemini Pro) một cách tự nhiên, "
-            "không quảng cáo lộ liễu. Ưu tiên chat_demo + comparison.",
-    "TOI": "Ca tối: mẹo thực chiến / quy trình 3 bước ứng dụng AI. Ưu tiên prompt_card + bullet_steps.",
+    "SANG": "Ca sáng: tin tức AI/công nghệ nhanh. Ưu tiên stat_card, ranking_card hoặc myth_vs_fact.",
+    "TRUA": "Ca trưa: so sánh tính năng/chia sẻ giá trị, lồng ghép khéo léo gói AI Pro tự nhiên. Ưu tiên comparison, chat_demo hoặc checklist_card.",
+    "TOI": "Ca tối: mẹo thực chiến / quy trình ứng dụng AI. Ưu tiên prompt_card, bullet_steps hoặc checklist_card.",
 }
 
 SLOT_VOICE = {
     "SANG": "vi-VN-HoaiMyNeural",
     "TRUA": "vi-VN-NamMinhNeural",
     "TOI": "vi-VN-HoaiMyNeural",
+}
+
+# Nút CTA biến thiên thông minh theo từng ca phát sóng (Slot-Aware Conversion CTA)
+SLOT_CTA_BUTTON = {
+    "SANG": "➕ Follow kênh cập nhật AI mỗi sáng",
+    "TRUA": "📩 Hỗ trợ AI Pro • Zalo 0356.141.136",
+    "TOI": "🔖 Lưu ngay video để áp dụng khi cần",
 }
 
 RSS_URLS = [
@@ -64,18 +83,22 @@ SCHEMA_EXAMPLE = {
          "result_note": "Rút ngắn 80% thời gian", "voiceover": "..."},
         {"type": "myth_vs_fact", "title": "90% người dùng hiểu sai", "myth": "Hỏi AI câu ngắn cụt lủn",
          "fact": "Giao vai trò + bối cảnh + định dạng đầu ra rõ ràng", "voiceover": "..."},
+        {"type": "checklist_card", "title": "4 dấu hiệu cần nâng cấp AI",
+         "items": ["Thường đọc PDF > 30 trang", "Cần lập bảng dữ liệu chuẩn", "Bị giới hạn lượt hỏi giữa chừng"], "voiceover": "..."},
+        {"type": "ranking_card", "title": "Top 3 mẹo AI tiết kiệm giờ làm",
+         "ranks": ["Hạng 3: Tóm tắt email dài", "Hạng 2: Tự kiểm tra lỗi Excel", "Hạng 1: Giao việc bằng Prompt mẫu"], "voiceover": "..."},
         {"type": "comparison", "title": "...", "left_title": "...", "left_items": ["..", "..", ".."],
          "right_title": "...", "right_items": ["..", "..", ".."], "voiceover": "..."},
         {"type": "stat_card", "title": "...", "metric": "10X", "summary": "...", "bullets": ["..", ".."], "voiceover": "..."},
         {"type": "bullet_steps", "title": "...", "steps": ["..", "..", ".."], "voiceover": "..."},
     ],
-    "cta": {"highlight_metric": "70%", "summary": "...", "button_text": "Xem chi tiết ở phần mô tả", "voiceover": "..."},
+    "cta": {"highlight_metric": "70%", "summary": "...", "button_text": "➕ Follow kênh cập nhật AI mỗi sáng", "voiceover": "..."},
     "caption": "Tiêu đề + mô tả ngắn #ai #congnghe #shorts",
+    "pinned_question": "Theo bạn tính năng AI nào giúp tiết kiệm nhiều thời gian nhất hiện nay? Bình luận ý kiến của bạn nhé!",
 }
 
 
 def fetch_tech_headlines(limit=8):
-    """Đọc RSS công nghệ/AI miễn phí trong ngày để cung cấp tin nóng cho Gemini."""
     items = []
     for url in RSS_URLS:
         try:
@@ -94,7 +117,9 @@ def fetch_tech_headlines(limit=8):
 def build_prompt(topic, slot, recent, theme=None, top_hooks=()):
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     voice = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
-    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho YouTube Shorts/TikTok (28-38 giây).
+    cta_btn = SLOT_CTA_BUTTON.get(slot, "➕ Follow kênh nhận mẹo AI mỗi ngày")
+    hooks_txt = "\n".join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"
+    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (28-38 giây).
 Chủ đề: {topic}
 {SLOT_HINT.get(slot, '')}
 {f'Dùng bg_theme = "{theme}".' if theme else 'Chọn bg_theme trong: ' + ', '.join(THEMES) + '.'}
@@ -103,29 +128,30 @@ Các chủ đề đã làm gần đây (KHÔNG lặp lại góc nhìn/nội dung
 {avoid}
 
 Các video hiệu quả nhất của kênh để học phong cách giật tít Hook ngắn gọn, cuốn hút:
-{chr(10).join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"}
+{hooks_txt}
 
 Yêu cầu:
-- Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây (giữ nguyên tên khóa), không markdown.
-- Tiếng Việt có dấu, giọng tự nhiên, không bịa số liệu gây hiểu lầm.
+- Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây, không markdown.
+- Tiếng Việt có dấu, tự nhiên, tuyệt đối không dùng từ mua bán lộ liễu.
 - hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh.
-- scenes: chọn 3 đến 4 cảnh phù hợp nhất trong 6 loại: chat_demo, prompt_card, myth_vs_fact, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
-- prompt_card: prompt_text là 1 câu lệnh mẫu thực tế 15-28 từ để người xem bấm tạm dừng lưu lại; result_note tối đa 40 ký tự.
-- myth_vs_fact: myth (sai lầm phổ biến) và fact (cách làm đúng) mỗi mục tối đa 65 ký tự.
+- scenes: chọn 3 đến 4 cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
+- checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 42 ký tự).
+- ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 42 ký tự).
+- prompt_card: prompt_text là 1 câu lệnh mẫu thực tế 15-26 từ; result_note tối đa 40 ký tự.
+- myth_vs_fact: myth và fact mỗi mục tối đa 60 ký tự.
 - comparison: left_items và right_items cùng 3 mục, mỗi mục tối đa 28 ký tự. bullet_steps: đúng 3 bước, mỗi bước tối đa 60 ký tự.
-- stat_card: metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%) để chạy hiệu ứng đếm số; bullets 2 mục ngắn.
-- cta.highlight_metric: bắt đầu bằng con số (vd 70%, 10X, 3 giờ).
-- Mỗi voiceover 12-26 từ, tổng thời lượng đọc khoảng 25-35 giây (tổng số từ voiceover toàn bộ video từ 60 đến 145 từ).
-- KỸ THUẬT SEAMLESS LOOP (RẤT QUAN TRỌNG): Câu cuối của cta.voiceover hãy kết thúc sao cho khi video tự phát lặp lại từ giây 0:00 (hook.voiceover), người nghe cảm giác câu chuyện nối liền mạch tự nhiên!
-- caption: tiêu đề hấp dẫn + 1 câu mô tả + 3-5 hashtag, tối đa 220 ký tự.
+- stat_card & cta: metric / highlight_metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%).
+- cta.button_text: đặt đúng là "{cta_btn}".
+- pinned_question: 1 câu hỏi mở thú vị liên quan trực tiếp đến chủ đề để đăng làm bình luận ghim kích thích người xem tranh luận.
+- Mỗi voiceover 12-26 từ (tổng toàn video 60-145 từ).
+- SEAMLESS LOOP: Câu cuối của cta.voiceover kết thúc sao cho khi lặp lại về giây 0:00 (hook.voiceover) nghe liền mạch tự nhiên!
 - mascot=true, voice="{voice}", voice_rate="+22%".
 
-Cấu trúc mẫu (chỉ chọn 3-4 cảnh trong danh sách scenes):
+Cấu trúc mẫu (chỉ chọn 3-4 cảnh trong scenes):
 {json.dumps(SCHEMA_EXAMPLE, ensure_ascii=False, indent=1)}"""
 
 
 def validate(s, slot=""):
-    """Raise ValueError nếu script không hợp lệ cho engine; trả về script đã chuẩn hóa."""
     def need(cond, msg):
         if not cond:
             raise ValueError(msg)
@@ -133,18 +159,19 @@ def validate(s, slot=""):
     need(isinstance(s, dict), "không phải object")
     if s.get("bg_theme") not in THEMES:
         s["bg_theme"] = THEMES[0]
-    s.setdefault("badge", "TIN CÔNG NGHỆ 2026")
+    s.setdefault("badge", "THIỆN AI THỰC CHIẾN")
     s["mascot"] = bool(s.get("mascot", True))
     if s.get("voice") not in ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"):
         s["voice"] = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
     s.setdefault("voice_rate", "+22%")
     h = s.get("hook")
     need(isinstance(h, dict) and str_list(h.get("headline"), 1) and h.get("voiceover"), "hook sai")
-    h["headline"] = h["headline"][:3]
+    h["headline"] = [str(x).strip()[:28] for x in h["headline"][:3]]
     need(isinstance(s.get("scenes"), list) and 1 <= len(s["scenes"]) <= 5, "scenes sai")
     for sc in s["scenes"]:
         t = sc.get("type")
         need(t in SCENE_TYPES and sc.get("voiceover") and sc.get("title"), f"scene sai: {t}")
+        sc["title"] = str(sc["title"]).strip()[:46]
         if t == "chat_demo":
             need(sc.get("user_prompt") and sc.get("ai_reply"), "chat_demo thiếu trường")
         elif t == "prompt_card":
@@ -152,34 +179,34 @@ def validate(s, slot=""):
             sc.setdefault("result_note", "Chuẩn xác & tiết kiệm thời gian")
         elif t == "myth_vs_fact":
             need(sc.get("myth") and sc.get("fact"), "myth_vs_fact thiếu myth/fact")
+        elif t == "checklist_card":
+            need(str_list(sc.get("items"), 2), "checklist_card thiếu items")
+            sc["items"] = [str(x).strip()[:52] for x in sc["items"][:4]]
+        elif t == "ranking_card":
+            need(str_list(sc.get("ranks"), 2), "ranking_card thiếu ranks")
+            sc["ranks"] = [str(x).strip()[:52] for x in sc["ranks"][:3]]
         elif t == "comparison":
             need(sc.get("left_title") and sc.get("right_title") and str_list(sc.get("left_items"), 2)
                  and str_list(sc.get("right_items"), 2), "comparison thiếu trường")
             n = min(len(sc["left_items"]), len(sc["right_items"]), 3)
-            sc["left_items"], sc["right_items"] = sc["left_items"][:n], sc["right_items"][:n]
+            sc["left_items"] = [str(x).strip()[:36] for x in sc["left_items"][:n]]
+            sc["right_items"] = [str(x).strip()[:36] for x in sc["right_items"][:n]]
         elif t == "stat_card":
             need(sc.get("metric") and sc.get("summary"), "stat_card thiếu trường")
-            sc["bullets"] = [b for b in sc.get("bullets", []) if isinstance(b, str)][:3]
+            sc["bullets"] = [str(b).strip()[:55] for b in sc.get("bullets", []) if isinstance(b, str)][:3]
         elif t == "bullet_steps":
             need(str_list(sc.get("steps"), 2), "bullet_steps thiếu steps")
-            sc["steps"] = sc["steps"][:4]
+            sc["steps"] = [str(x).strip()[:75] for x in sc["steps"][:4]]
     c = s.get("cta")
     need(isinstance(c, dict) and c.get("highlight_metric") and c.get("summary") and c.get("voiceover"), "cta sai")
-    c.setdefault("button_text", "Xem chi tiết ở phần mô tả")
+    c["button_text"] = SLOT_CTA_BUTTON.get(slot) or c.get("button_text") or "➕ Follow kênh nhận mẹo AI mỗi ngày"
     need(isinstance(s.get("caption"), str) and s["caption"].strip(), "thiếu caption")
-    # Auto-QC: kiểm tra tổng độ dài lời thoại & cắt gọn các dòng chữ quá dài tránh vỡ khung
+    s.setdefault("pinned_question", "Bạn đang áp dụng công cụ AI nào cho công việc hàng ngày? Chia sẻ dưới phần bình luận nhé!")
+
     all_vo = [h["voiceover"]] + [sc["voiceover"] for sc in s["scenes"]] + [c["voiceover"]]
     total_words = sum(len(str(v).split()) for v in all_vo)
-    need(45 <= total_words <= 170, f"tổng số từ voiceover không hợp lý ({total_words} từ)")
-    h["headline"] = [str(x).strip()[:28] for x in h["headline"][:3]]
-    for sc in s["scenes"]:
-        sc["title"] = str(sc["title"]).strip()[:46]
-        if sc["type"] == "comparison":
-            sc["left_items"] = [str(x).strip()[:36] for x in sc["left_items"]]
-            sc["right_items"] = [str(x).strip()[:36] for x in sc["right_items"]]
-        elif sc["type"] == "bullet_steps":
-            sc["steps"] = [str(x).strip()[:75] for x in sc["steps"]]
-    # Quét làm sạch từ nhạy cảm TikTok trên toàn bộ voiceover & caption
+    need(40 <= total_words <= 180, f"tổng số từ voiceover không hợp lý ({total_words} từ)")
+
     h["voiceover"] = sanitize_tiktok_text(h["voiceover"])
     for sc in s["scenes"]:
         sc["voiceover"] = sanitize_tiktok_text(sc["voiceover"])
@@ -188,13 +215,66 @@ def validate(s, slot=""):
     return s
 
 
+def _fallback_script(topic, slot, theme):
+    """Kịch bản dự phòng thông minh từ chủ đề nếu toàn bộ 8 model Google AI Studio bị sập 503 cùng lúc."""
+    words = topic.split()
+    l1 = " ".join(words[:4])[:18] or "Mẹo AI thực chiến"
+    l2 = " ".join(words[4:8])[:18] or "giúp tiết kiệm giờ"
+    return validate({
+        "badge": "THIỆN AI THỰC CHIẾN",
+        "bg_theme": theme if theme in THEMES else "cyber_blue",
+        "mascot": True,
+        "voice": SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural"),
+        "voice_rate": "+22%",
+        "hook": {
+            "headline": [l1, l2, "Áp dụng ngay!"],
+            "voiceover": f"Đây là bí quyết về {topic} giúp bạn xử lý công việc nhanh gấp nhiều lần mỗi ngày.",
+        },
+        "scenes": [
+            {
+                "type": "myth_vs_fact",
+                "title": "Cách tiếp cận đúng",
+                "myth": "Làm thủ công tốn hàng giờ hoặc hỏi AI câu ngắn cụt lủn",
+                "fact": "Giao rõ vai trò, dữ liệu đầu vào và định dạng kết quả mong muốn",
+                "voiceover": "Thay vì làm thủ công tốn hàng giờ, bạn chỉ cần cung cấp rõ ngữ cảnh và định dạng đầu ra cho AI.",
+            },
+            {
+                "type": "bullet_steps",
+                "title": "3 bước thực hiện chuẩn",
+                "steps": [
+                    "Chuẩn bị nội dung hoặc tài liệu cần xử lý rõ ràng",
+                    "Nhập câu lệnh yêu cầu tóm tắt kèm bảng hành động cụ thể",
+                    "Kiểm tra lại các con số quan trọng trước khi xuất bản",
+                ],
+                "voiceover": "Áp dụng đúng ba bước từ chuẩn bị dữ liệu, giao câu lệnh chi tiết đến kiểm tra nhanh kết quả cuối cùng.",
+            },
+            {
+                "type": "stat_card",
+                "title": "Hiệu quả thực tế",
+                "metric": "5X",
+                "summary": "Tăng tốc độ hoàn thành công việc hàng ngày",
+                "bullets": ["Giảm sai sót thủ công", "Dễ áp dụng cho mọi ngành nghề"],
+                "voiceover": "Quy trình gọn nhẹ này giúp tăng gấp năm lần tốc độ xử lý tài liệu và giảm hẳn sai sót.",
+            },
+        ],
+        "cta": {
+            "highlight_metric": "70%",
+            "summary": "Tiết kiệm 70% thời gian làm việc lặp lại mỗi ngày",
+            "button_text": SLOT_CTA_BUTTON.get(slot, "➕ Follow kênh cập nhật AI mỗi sáng"),
+            "voiceover": "Làm chủ công cụ thông minh giúp bạn tiết kiệm bảy mươi phần trăm thời gian, và đây chính là lý do",
+        },
+        "caption": f"{topic} cực dễ áp dụng trong 30 giây! #ai #congnghe #thiennguyenai #shorts",
+        "pinned_question": f"Bạn đã thử áp dụng AI cho '{topic}' chưa? Để lại bình luận bên dưới nhé!",
+    }, slot=slot)
+
+
 def _call(model, prompt, key):
     body = {"contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"response_mime_type": "application/json", "temperature": 0.9}}
     r = requests.post(ENDPOINT.format(model=model), headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-                      json=body, timeout=60)
+                      json=body, timeout=55)
     if r.status_code != 200:
-        raise RuntimeError(f"{model} HTTP {r.status_code}: {r.text[:200]}")
+        raise RuntimeError(f"{model} HTTP {r.status_code}: {r.text[:180]}")
     data = r.json()
     parts = data["candidates"][0]["content"]["parts"]
     text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
@@ -203,11 +283,10 @@ def _call(model, prompt, key):
     return json.loads(text)
 
 
-def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries=2, top_hooks=()):
-    """Sinh script.json hợp lệ. Thử lần lượt các model Free, retry khi JSON/schema sai."""
+def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries=1, top_hooks=()):
+    """Thử lần lượt 8 model Gemini (có exponential backoff khi 503); nếu tất cả đều 503 thì dùng Fallback Script."""
     key = api_key or os.environ["GEMINI_API_KEY"]
     prompt = build_prompt(topic, slot, list(recent), theme, top_hooks=top_hooks)
-    last = None
     for model in MODELS:
         for attempt in range(retries + 1):
             try:
@@ -217,63 +296,56 @@ def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries
                 print(f"[gemini] OK model={model} voice={script['voice']} scenes={[x['type'] for x in script['scenes']]}")
                 return script
             except Exception as ex:
-                last = ex
-                print(f"[gemini] {model} lần {attempt + 1} lỗi: {str(ex)[:160]}")
-                if "HTTP 404" in str(ex) or "HTTP 400" in str(ex):
+                msg = str(ex)
+                print(f"[gemini] {model} lần {attempt + 1} lỗi: {msg[:150]}")
+                if "HTTP 404" in msg or "HTTP 400" in msg:
                     break
-                time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"Gemini không sinh được script hợp lệ: {last}")
+                time.sleep(3 * (attempt + 1))
+    print("[gemini] CẢNH BÁO: Toàn bộ 8 model Gemini đang quá tải 503 -> kích hoạt Fallback Script để ca phát sóng không bị gián đoạn!")
+    return _fallback_script(topic, slot, theme)
 
 
 def generate_topic(slot, recent=(), api_key=None):
-    """Tự động nghĩ ra 1 chủ đề mới theo ca (ưu tiên tin RSS mới cho Ca Sáng), không trùng với recent."""
     key = api_key or os.environ["GEMINI_API_KEY"]
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     news_block = ""
     if slot == "SANG":
         headlines = fetch_tech_headlines()
         if headlines:
-            news_block = "\nTin tức công nghệ/AI mới nhất hôm nay (hãy chọn 1 tin thú vị nhất để làm chủ đề):\n" + "\n".join(f"- {h}" for h in headlines)
-
-    prompt = f"""Bạn là biên tập viên kênh YouTube Shorts / TikTok về AI & Công nghệ năm 2026.
+            news_block = "\nTin tức công nghệ/AI mới nhất hôm nay:\n" + "\n".join(f"- {h}" for h in headlines)
+    prompt = f"""Bạn là biên tập viên kênh 'Thiện AI Thực Chiến'.
 Ca phát sóng: {slot} — {SLOT_HINT.get(slot, '')}{news_block}
 Các chủ đề đã làm gần đây (TUYỆT ĐỐI KHÔNG TRÙNG LẶP):
 {avoid}
 
-Hãy đề xuất 1 chủ đề video ngắn (30-40 giây) mới mẻ, thực tế, dễ thu hút người xem Việt Nam.
-Trả về JSON đúng định dạng: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber"}}"""
-    for model in MODELS:
+Hãy đề xuất 1 chủ đề video ngắn (30-40 giây) mới mẻ, thực tế.
+Trả về JSON: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber"}}"""
+    for model in MODELS[:5]:
         try:
             res = _call(model, prompt, key)
             topic = str(res.get("topic", "")).strip()
             theme = res.get("bg_theme") if res.get("bg_theme") in THEMES else THEMES[0]
             if topic:
-                print(f"[gemini] tự sinh chủ đề mới ({slot}): {topic}")
                 return topic, theme
-        except Exception as ex:
-            print(f"[gemini] generate_topic {model} lỗi: {ex}")
-    return f"Mẹo ứng dụng AI tiết kiệm thời gian ca {slot}", THEMES[0]
+        except Exception:
+            time.sleep(2)
+    return f"3 mẹo ứng dụng AI tăng tốc công việc ca {slot}", THEMES[0]
 
 
 def generate_batch_topics(recent=(), days=3, api_key=None):
-    """Sinh 1 đợt 9 chủ đề (3 ngày x 3 ca SANG/TRUA/TOI) kết hợp tin nóng RSS khi kho CHO_TAO sắp cạn."""
     key = api_key or os.environ["GEMINI_API_KEY"]
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     headlines = fetch_tech_headlines()
     news_block = "\nTin tức AI/công nghệ mới nhất:\n" + "\n".join(f"- {h}" for h in headlines) if headlines else ""
     count = days * 3
-    prompt = f"""Bạn là giám đốc nội dung kênh 'Thiện AI Thực Chiến' (YouTube Shorts & TikTok).
-Hãy lập kế hoạch {count} chủ đề video ngắn (chia đều theo thứ tự SANG, TRUA, TOI cho {days} ngày tới):
-- SANG: Tin tức AI / công nghệ mới, đột phá (ưu tiên từ tin mới nhất bên dưới).
-- TRUA: So sánh tính năng Free vs Pro / tối ưu hiệu suất làm việc với AI.
-- TOI: 3 bước thực chiến / câu lệnh Prompt giải quyết công việc cụ thể.
+    prompt = f"""Bạn là giám đốc nội dung kênh 'Thiện AI Thực Chiến'.
+Hãy lập kế hoạch {count} chủ đề video ngắn (chia đều theo thứ tự SANG, TRUA, TOI cho {days} ngày tới).
 {news_block}
-Các chủ đề đã làm (TUYỆT ĐỐI KHÔNG TRÙNG LẶP):
+Các chủ đề đã làm (KHÔNG TRÙNG LẶP):
 {avoid}
 
-Trả về JSON đúng cấu trúc:
-{{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic": "..."}}, ...]}}"""
-    for model in MODELS:
+Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic": "..."}}, ...]}}"""
+    for model in MODELS[:5]:
         try:
             res = _call(model, prompt, key)
             items = res.get("items", [])
@@ -285,8 +357,7 @@ Trả về JSON đúng cấu trúc:
                 if tp:
                     out.append((sl, th, tp))
             if len(out) >= 3:
-                print(f"[gemini] đã sinh tự động {len(out)} chủ đề mới cho hàng đợi")
                 return out
-        except Exception as ex:
-            print(f"[gemini] generate_batch_topics {model} lỗi: {ex}")
+        except Exception:
+            time.sleep(2)
     return []

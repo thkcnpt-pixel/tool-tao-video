@@ -68,7 +68,8 @@ var HELP_TEXT =
   '1️⃣ CÁC LỆNH GÕ NHANH (chỉ cần gõ dấu / là hiện menu):\n' +
   '• /tao — Dựng ngay 1 video tiếp theo trong lịch\n' +
   '• /tao <chủ đề> — Dựng ngay video theo chủ đề bạn gõ\n' +
-  '• /them <chủ đề> — Lưu chủ đề vào hàng đợi Google Sheet để chạy dần theo lịch Cron\n' +
+  '• /them <chủ đề> — Lưu chủ đề vào hàng đợi Google Sheet\n' +
+  '• /xoa — Bỏ qua (hủy) chủ đề CHO_TAO tiếp theo trong hàng đợi\n' +
   '• /sang, /trua, /toi — Dựng ngay 1 video cho Ca Sáng / Trưa / Tối\n' +
   '• /lich — Xem số bài Chờ tạo, Chờ duyệt, Đã đăng & 3 chủ đề sắp tới\n' +
   '• /stats — Xem báo cáo các video YouTube Shorts đã xuất bản\n' +
@@ -178,6 +179,30 @@ function doPost(e) {
         shAdd.appendRow([newId, dateStr, 'SANG', newTopic, pickTheme, '', '', 'CHO_TAO', '', '']);
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
           text: '📥 Đã lưu chủ đề vào hàng đợi CHO_TAO trên Google Sheets:\n"' + newTopic + '"\n(Hệ thống sẽ tự động dựng vào ca tới, hoặc gõ /tao nếu muốn dựng ngay).'});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
+      // Lệnh /xoa (bỏ qua dòng CHO_TAO tiếp theo trong lịch nếu không thích chủ đề đó)
+      if (/^\/xoa(@\S+)?$/i.test(txt)) {
+        var shX = getSheet_();
+        var dX = shX.getDataRange().getValues();
+        var foundRow = -1, skippedTopic = '';
+        for (var rx = 1; rx < dX.length; rx++) {
+          if (String(dX[rx][COL_STATUS - 1]) === 'CHO_TAO') {
+            foundRow = rx + 1;
+            skippedTopic = String(dX[rx][COL_TOPIC - 1]);
+            break;
+          }
+        }
+        if (foundRow > 0) {
+          shX.getRange(foundRow, COL_STATUS).setValue('DA_HUY');
+          tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+            text: '🗑️ Đã bỏ qua chủ đề khỏi hàng đợi CHO_TAO:\n"' + skippedTopic + '"'});
+        } else {
+          tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+            text: '✨ Hàng đợi hiện không có dòng CHO_TAO nào để xóa.'});
+        }
         dropPendingWebhook_();
         return ContentService.createTextOutput('ok');
       }

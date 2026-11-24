@@ -1,7 +1,6 @@
-"""Pipeline đăng bài (Giai đoạn 4): kéo output.mp4 từ Drive -> YouTube Shorts (Private) + gửi bản final về Telegram.
-Có khóa trạng thái DANG_DANG + concurrency lock để tuyệt đối không bao giờ đăng trùng 2 lần.
-"""
+"""Pipeline đăng bài (khi bấm nút Duyệt hoặc Tạo lại từ Telegram)."""
 import argparse
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -17,7 +16,6 @@ import facebook_uploader  # noqa: E402
 
 
 def find_target_row(sheets, video_id=None):
-    """Chỉ lấy dòng đang ở đúng trạng thái DA_DUYET (nếu đã là DANG_DANG hoặc DA_DANG thì bỏ qua ngay)."""
     rows = sheets.rows()
     if video_id:
         for r in rows:
@@ -33,35 +31,24 @@ def find_target_row(sheets, video_id=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--video-id", help="id dòng trong tab Schedule (nếu bỏ trống sẽ lấy dòng DA_DUYET đầu tiên)")
+    ap.add_argument("--video-id", help="id dòng trong tab Schedule")
     ap.add_argument("--skip-youtube", action="store_true")
     a = ap.parse_args()
 
     sheets = SheetsClient()
+
     if a.video_id and str(a.video_id).startswith("REGEN:"):
         real_id = str(a.video_id).split("REGEN:", 1)[1]
-        print(f"[publish] nhận lệnh TẠO LẠI qua cầu nối Apps Script cho dòng {real_id}")
         try:
             TelegramBot().clear_pending_webhook()
         except Exception:
             pass
-        target = None
-        for cand in sheets.rows():
-            if cand["id"] == real_id:
-                target = cand
-                break
-        if target and target.get("status") in ("DA_DANG", "DANG_TAO_LAI"):
-            print(f"[publish] BỎ QUA REGEN trùng cho {real_id} (status={target.get('status')})")
+        target = next((c for c in sheets.rows() if c["id"] == real_id), None)
+        if target and target.get("status") == "DANG_TAO_LAI":
             return 0
         if target:
             sheets.update(target["_row"], status="DANG_TAO_LAI")
-            fb_url = None
-        if facebook_uploader.is_configured():
-            try:
-                fb_url = facebook_uploader.upload_reel(mp4, row["caption"], row["topic"])
-            except Exception as ex:
-                print(f"[facebook] CẢNH BÁO ({ex!r})")
-        bot = TelegramBot()
+            bot = TelegramBot()
             notice_mid = bot.send_text(f"🔄 Đang viết lại kịch bản & dựng video mới cho {real_id} (~2-3 phút)...")
             bot.cleanup_duplicate_replies(int(target.get("telegram_msg_id") or 0) - 1, notice_mid)
         import produce
@@ -75,7 +62,6 @@ def main():
 
     r = row["_row"]
     drive_id = row["video_url_or_drive_id"]
-    # Khóa trạng thái ngay lập tức sang DANG_DANG trước khi tải & upload YouTube để chặn mọi job chạy trùng
     sheets.update(r, status="DANG_DANG")
     try:
         TelegramBot().clear_pending_webhook()
@@ -83,32 +69,41 @@ def main():
         pass
     print(f"[publish] đã khóa dòng {r} (status=DANG_DANG): id={row['id']} drive_id={drive_id}")
 
+    pinned_q = ""
+    try:
+        pinned_q = json.loads(row.get("script_json") or "{}").get("pinned_question", "")
+    except Exception:
+        pass
+
     drive = DriveClient()
     with tempfile.TemporaryDirectory() as tmp:
         mp4 = str(Path(tmp) / f"{row['id']}.mp4")
         drive.download(drive_id, mp4)
         print(f"[drive] đã tải {mp4} ({Path(mp4).stat().st_size / 1e6:.1f} MB)")
 
-        yt_url = None
+        yt_url, yt_mode = None, ""
         if not a.skip_youtube:
             try:
-                yt_res = youtube_uploader.upload_short(mp4, row["caption"], row["topic"], slot=row.get("slot", ""), auto_public=True)
+                yt_res = youtube_uploader.upload_short(
+                    mp4, row["caption"], row["topic"],
+                    slot=row.get("slot", ""), auto_public=True, pinned_question=pinned_q,
+                )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] upload OK ({yt_mode}): {yt_url}")
             except Exception as ex:
-                print(f"[youtube] CẢNH BÁO không upload được YouTube ({ex!r}) -> vẫn gửi bản final về Telegram")
+                print(f"[youtube] CẢNH BÁO không upload được YouTube ({ex!r})")
 
-        fb_url = None
         if facebook_uploader.is_configured():
             try:
-                fb_url = facebook_uploader.upload_reel(mp4, row["caption"], row["topic"])
+                facebook_uploader.upload_reel(mp4, row["caption"], row["topic"])
             except Exception as ex:
                 print(f"[facebook] CẢNH BÁO ({ex!r})")
+
         bot = TelegramBot()
         final_mid = bot.send_final(
             mp4,
             f"🚀 BẢN FINAL ĐÃ DUYỆT ({row['id']})\n"
-            f"📌 Tải video này đăng TikTok kèm nhạc trend (copy caption bên dưới):\n\n"
+            f"📌 Tải video này đăng TikTok kèm nhạc trend:\n\n"
             f"{row['caption']}",
             youtube_url=yt_url,
         )
@@ -116,7 +111,8 @@ def main():
         print("[telegram] đã gửi bản final + caption sạch về Telegram")
 
     yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""
-    new_ref = f"{drive_id}|{yt_id}" if yt_id and "|" not in drive_id else drive_id
+    base_drv = str(drive_id).split("|")[0]
+    new_ref = f"{base_drv}|{yt_id}" if yt_id else base_drv
     sheets.update(r, status="DA_DANG", video_url_or_drive_id=new_ref)
     print(f"[sheets] dòng {r}: status=DA_DANG")
     return 0

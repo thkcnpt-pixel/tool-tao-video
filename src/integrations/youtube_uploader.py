@@ -121,7 +121,7 @@ def fetch_video_views(video_ids):
         return {}
 
 
-def upload_short(video_path, caption, topic="", slot="", auto_public=True):
+def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinned_question=""):
     """Upload video lên YouTube Shorts:
     - Nếu bấm Duyệt trước giờ vàng của ca -> tự động Lên lịch Công khai (Scheduled) đúng 05:00 / 11:30 / 18:00 giờ VN.
     - Nếu bấm Duyệt sau giờ vàng của ca -> tự động bật Công khai (Public) ngay lập tức.
@@ -165,7 +165,8 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True):
 
     # Tự động thử đăng bình luận đầu tiên
     clean_line = re.sub(r"#\S+", "", caption).strip()
-    comment = f"📌 {clean_line}\n📩 Cần hỗ trợ công cụ AI hoặc nâng cấp Gemini Pro chính chủ? Nhắn Zalo mình hỗ trợ nhanh nhé: 0356.141.136\n👉 Bạn đang dùng AI nào mỗi ngày? Bình luận bên dưới nhé!"
+    q_line = pinned_question.strip() if pinned_question else "Bạn đang dùng công cụ AI nào mỗi ngày? Bình luận bên dưới nhé!"
+    comment = f"💬 {q_line}\n━━━━━━━━━━━━━━━━━━━━\n📩 Hỗ trợ AI & Nâng cấp Gemini Pro chính chủ / Zalo: 0356.141.136"
     post_top_comment(yt, vid, comment)
 
     return f"https://youtube.com/shorts/{vid}", mode_note

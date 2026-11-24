@@ -1,5 +1,5 @@
-"""Pipeline sản xuất & xuất bản tự động 100% (Full Auto-Approve cho mọi ca):
-Sheets (tự bơm 9 chủ đề khi < 3 bài) -> Gemini -> Render -> Drive -> Tự động đăng YouTube Shorts (Scheduled giờ vàng / Public) -> Gửi Telegram (kèm nút Tạo lại / Xóa) + Báo cáo tuần Chủ Nhật.
+"""Pipeline sản xuất & xuất bản tự động 100% (Full Auto-Approve cho mọi ca, đã sửa sạch SyntaxError):
+Sheets -> Gemini -> Render -> Drive -> YouTube Shorts (Scheduled giờ vàng / Public + Smart Pinned Question) -> Telegram.
 """
 import argparse
 import datetime
@@ -32,9 +32,8 @@ def current_vn_slot():
     return "TOI"
 
 
-
 def retry_pending_youtube(sheets, drive, bot):
-    """Nếu có video hôm trước bị kẹt quota YouTube (status == CHO_DANG_YT), tự động đăng bù lên YouTube khi quota vừa reset."""
+    """Nếu có video hôm trước bị kẹt quota YouTube (status == CHO_DANG_YT), tự động đăng bù."""
     pending_yt = [r for r in sheets.rows() if r["status"] == "CHO_DANG_YT" and r["video_url_or_drive_id"]]
     for row in pending_yt[:2]:
         try:
@@ -46,14 +45,13 @@ def retry_pending_youtube(sheets, drive, bot):
                 yt_id = yt_url.rsplit("/", 1)[-1]
                 base_drv = str(row["video_url_or_drive_id"]).split("|")[0]
                 sheets.update(row["_row"], status="DA_DANG", video_url_or_drive_id=f"{base_drv}|{yt_id}")
-                bot.send_text(f"✅ Đã tự động đăng bù lên YouTube Shorts thành công cho video {row['id']}:
-▶️ {yt_url}")
+                bot.send_text(f"✅ Đã tự động đăng bù lên YouTube Shorts cho {row['id']}: {yt_url}")
         except Exception as ex:
             print(f"[youtube] chưa đăng bù được {row['id']} ({ex!r})")
             break
 
+
 def maybe_refill_queue(sheets, now):
-    """Nếu trong Sheet còn dưới 3 dòng CHO_TAO thì tự động bơm thêm 9 chủ đề (3 ngày x 3 ca)."""
     pending = [r for r in sheets.rows() if r["status"] == "CHO_TAO"]
     if len(pending) >= 3:
         return
@@ -68,7 +66,6 @@ def maybe_refill_queue(sheets, now):
 
 
 def maybe_send_weekly_report(sheets, bot, now, slot):
-    """Tối Chủ Nhật (weekday == 6, ca TOI): tự động gửi Báo cáo Tổng kết Tuần về Telegram."""
     if now.weekday() != 6 or slot != "TOI":
         return
     rows = sheets.rows()
@@ -91,7 +88,7 @@ def main():
     ap.add_argument("--slot", choices=["SANG", "TRUA", "TOI"])
     ap.add_argument("--seed", help="thêm 1 dòng CHO_TAO với chủ đề này trước khi chạy")
     ap.add_argument("--video-id", help="chỉ định id dòng cần dựng (hoặc dựng lại)")
-    ap.add_argument("--manual-approve", action="store_true", help="nếu bật thì chỉ gửi chờ duyệt, không tự đăng YouTube ngay")
+    ap.add_argument("--manual-approve", action="store_true")
     ap.add_argument("--output", default=str(ROOT / "output" / "output.mp4"))
     a = ap.parse_args()
 
@@ -157,10 +154,13 @@ def main():
         drive.cleanup_old_videos(keep_latest=100)
         print(f"[drive] upload OK drive_file_id={vid}")
 
-        # Tự động duyệt & đăng luôn lên YouTube Shorts + Facebook Reels cho TẤT CẢ các ca
         if not a.manual_approve:
             try:
-                yt_res = youtube_uploader.upload_short(a.output, script["caption"], row["topic"], slot=eff_slot, auto_public=True)
+                yt_res = youtube_uploader.upload_short(
+                    a.output, script["caption"], row["topic"],
+                    slot=eff_slot, auto_public=True,
+                    pinned_question=script.get("pinned_question", ""),
+                )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] Auto-Publish OK ({yt_mode}): {yt_url}")
             except Exception as ex:
@@ -189,7 +189,6 @@ def main():
     sheets.update(r, video_url_or_drive_id=ref_val, telegram_msg_id=msg_id, status=final_status)
     print(f"[sheets] dòng {r}: status={final_status}, msg_id={msg_id}, ref={ref_val}")
 
-    # Tự động kiểm tra và bơm thêm 9 chủ đề nếu kho còn < 3 bài + gửi báo cáo tuần tối Chủ Nhật
     try:
         maybe_refill_queue(sheets, now)
         maybe_send_weekly_report(sheets, bot, now, eff_slot)
