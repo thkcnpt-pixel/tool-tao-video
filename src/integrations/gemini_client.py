@@ -8,8 +8,9 @@ import requests
 
 # Chuỗi 8 model Free của Google AI Studio để khi 1-2 model bị 503 High Demand sẽ sang ngay model rảnh
 MODELS = [
-    "gemini-3.1-flash-lite",
     "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
@@ -282,16 +283,24 @@ def get_api_keys(explicit_key=None):
     return keys
 
 
+DEAD_KEYS = set()
+
+
 def _call_with_rotation(model, prompt, keys, parts=None):
-    """Thử gọi qua từng API Key nếu gặp 429 (hết quota) hoặc 503/403."""
+    """Thử gọi qua từng API Key; tự động cách ly Key lỗi 403 trong suốt phiên chạy để không tốn lượt gọi thừa."""
     last_err = None
-    for idx, k in enumerate(keys):
+    active_keys = [k for k in keys if k not in DEAD_KEYS] or keys
+    for idx, k in enumerate(active_keys):
         try:
             return _call(model, prompt, k, parts=parts), idx + 1
         except Exception as ex:
             last_err = ex
             msg = str(ex)
-            if any(code in msg for code in ("HTTP 429", "HTTP 503", "HTTP 403", "quota", "RESOURCE_EXHAUSTED")):
+            if "HTTP 403" in msg:
+                DEAD_KEYS.add(k)
+                print("[gemini] Key trả HTTP 403 -> tự động cách ly trong phiên chạy, chuyển sang Key sống")
+                continue
+            if any(code in msg for code in ("HTTP 429", "HTTP 503", "quota", "RESOURCE_EXHAUSTED", "Read timed out", "HTTPSConnectionPool")):
                 print(f"[gemini] Key#{idx + 1} ({model}) bận/hết quota -> xoay sang Key kế tiếp")
                 continue
             raise

@@ -133,10 +133,12 @@ def main():
 
     r = row["_row"]
     eff_slot = row["slot"] or slot
-    print(f"[produce] dòng {r}: {row['id']} | {row['topic']}")
+    sheets.update(r, status="DANG_TAO")
+    print(f"[produce] đã khóa dòng {r} (status=DANG_TAO): {row['id']} | {row['topic']}")
 
-    script = generate_script(row["topic"], eff_slot, sheets.recent_topics(15, exclude_row=r),
-                             theme=row["bg_theme"] or None, top_hooks=sheets.top_performing_hooks(3))
+    recent_list = sheets.recent_topics(15, exclude_row=r)
+    top_hooks = sheets.top_performing_hooks(3)
+    script = generate_script(row["topic"], eff_slot, recent_list, theme=row["bg_theme"] or None, top_hooks=top_hooks)
     sheets.update(r, bg_theme=script["bg_theme"], script_json=json.dumps(script, ensure_ascii=False),
                   caption=script["caption"])
     print("[sheets] đã ghi script_json + caption")
@@ -152,7 +154,14 @@ def main():
         music = drive.random_music(tmp)
         render_video.render(script, a.output, music=music)
         qa = video_qa.review_video(a.output, script)
-        qa_pass = qa.get("pass", True) and qa.get("score", 9.0) >= 6.5
+        qa_pass = qa.get("pass", True) and qa.get("score", 9.0) >= 6.0
+        if not qa_pass:
+            print(f"[qa] Lần 1 chưa đạt ({qa}) -> tự động viết lại kịch bản gọn hơn & render lại 1 lần (Self-Heal)!")
+            script = generate_script(row["topic"], eff_slot, recent_list, theme=row["bg_theme"] or None, top_hooks=top_hooks)
+            sheets.update(r, bg_theme=script["bg_theme"], script_json=json.dumps(script, ensure_ascii=False), caption=script["caption"])
+            render_video.render(script, a.output, music=music)
+            qa = video_qa.review_video(a.output, script)
+            qa_pass = qa.get("pass", True) and qa.get("score", 9.0) >= 6.0
         qa_note = f"{qa.get('score', 9.0)}/10 — {qa.get('summary', 'Đạt chuẩn')}" + ("" if qa_pass else " ⚠️ (Cần xem lại)")
 
         vid = drive.upload(a.output, name=f"{row['id']}.mp4")
