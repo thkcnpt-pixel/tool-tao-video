@@ -1,0 +1,78 @@
+name: Buffer Factory (Kho Dự Trữ 60 Video 30 Ngày - Trưa & Tối)
+
+on:
+  schedule:
+    # Chạy 4 đợt thấp điểm mỗi ngày (01:15, 07:15, 13:30, 20:30 giờ VN) dựng mỗi đợt 3 video
+    # -> Tự động lấp đầy kho 60 video (30 Trưa + 30 Tối = 30 ngày), khi đủ 60 video sẽ tự nghỉ sau 5 giây!
+    - cron: "15 18 * * *"
+    - cron: "15 0 * * *"
+    - cron: "30 6 * * *"
+    - cron: "30 13 * * *"
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: "Số lượng video dựng thêm trong đợt này (mặc định 3)"
+        required: false
+        default: "3"
+      notify:
+        description: "Gửi tin nhắn báo cáo về Telegram sau khi nạp xong (true/false)"
+        required: false
+        default: "true"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: buffer-factory-vault
+  cancel-in-progress: false
+
+jobs:
+  build-buffer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Cache Playwright Chromium browser
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install FFmpeg & Python dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-core
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Pre-render Evergreen Videos into 30-Day Google Drive Vault
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          DRIVE_OUTPUT_FOLDER_ID: ${{ secrets.DRIVE_OUTPUT_FOLDER_ID }}
+          DRIVE_MUSIC_FOLDER_ID: ${{ secrets.DRIVE_MUSIC_FOLDER_ID }}
+          DRIVE_OAUTH_CLIENT_ID: ${{ secrets.DRIVE_OAUTH_CLIENT_ID }}
+          DRIVE_OAUTH_CLIENT_SECRET: ${{ secrets.DRIVE_OAUTH_CLIENT_SECRET }}
+          DRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.DRIVE_OAUTH_REFRESH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          BS="${{ github.event.inputs.batch_size || '3' }}"
+          NOTIFY_FLAG=""
+          if [ "${{ github.event.inputs.notify }}" = "true" ]; then
+            NOTIFY_FLAG="--notify"
+          fi
+          python src/buffer_factory.py --batch-size "$BS" $NOTIFY_FLAG

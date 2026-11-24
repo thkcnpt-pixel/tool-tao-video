@@ -401,3 +401,39 @@ Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic"
         except Exception:
             time.sleep(2)
     return []
+
+
+def generate_evergreen_topics(slot, count=6, recent=(), api_key=None):
+    """Sinh danh sách chủ đề EVERGREEN (giá trị bền vững, để 30-60 ngày vẫn hấp dẫn, không phụ thuộc tin tức ngày) cho kho dự trữ Ca Trưa & Ca Tối."""
+    keys = get_api_keys(api_key)
+    avoid = "\n".join(f"- {t}" for t in recent[-35:]) or "(chưa có)"
+    focus = (
+        "So sánh tính năng AI Free vs Pro, bài toán tiết kiệm thời gian/chi phí thực tế, cách chọn công cụ AI thông minh cho dân văn phòng/kinh doanh"
+        if slot == "TRUA"
+        else "Quy trình 3 bước thực chiến, câu lệnh Prompt mẫu copy-dùng-ngay, mẹo xử lý Word/Excel/PDF/Email/Báo cáo/Học tập bằng AI"
+    )
+    prompt = f"""Bạn là giám đốc nội dung kênh 'Thiện AI Thực Chiến'.
+Hãy đề xuất {count} chủ đề video ngắn EVERGREEN (giá trị thực chiến bền vững, xem vào bất kỳ thời điểm nào trong năm cũng hữu ích, KHÔNG gắn ngày tháng cụ thể) cho ca {slot}:
+Định hướng ca {slot}: {focus}.
+
+Các chủ đề đã có trong kho (TUYỆT ĐỐI KHÔNG TRÙNG Ý TƯỞNG):
+{avoid}
+
+Trả về JSON đúng định dạng:
+{{"items": [{{"bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber", "topic": "Tên chủ đề súc tích 10-18 từ"}}, ...]}}"""
+    for model in MODELS[:5]:
+        try:
+            res, _ = _call_with_rotation(model, prompt, keys)
+            out = []
+            for idx, it in enumerate(res.get("items", [])[:count]):
+                th = it.get("bg_theme") if it.get("bg_theme") in THEMES else THEMES[idx % 4]
+                tp = str(it.get("topic", "")).strip()
+                if tp:
+                    out.append((sl := slot, th, tp))
+            if out:
+                print(f"[gemini] đã sinh {len(out)} chủ đề Evergreen mới cho kho dự trữ ca {slot}")
+                return out
+        except Exception as ex:
+            print(f"[gemini] generate_evergreen_topics ({model}) lỗi: {str(ex)[:100]}")
+            time.sleep(2)
+    return [(slot, THEMES[0], f"Bí quyết ứng dụng AI tối ưu hiệu suất làm việc ca {slot}")]

@@ -71,7 +71,9 @@ var HELP_TEXT =
   '• /them <chủ đề> — Lưu chủ đề vào hàng đợi Google Sheet\n' +
   '• /xoa — Bỏ qua (hủy) chủ đề CHO_TAO tiếp theo trong hàng đợi\n' +
   '• /sang, /trua, /toi — Dựng ngay 1 video cho Ca Sáng / Trưa / Tối\n' +
-  '• /lich — Xem số bài Chờ tạo, Chờ duyệt, Đã đăng & 3 chủ đề sắp tới\n' +
+  '• /kho — Xem tồn kho 60 video dựng sẵn 30 ngày (Trưa & Tối)\n' +
+  '• /nap_kho — Ra lệnh dựng nạp thêm ngay 3 video vào kho dự trữ\n' +
+  '• /lich — Xem số bài Chờ tạo, Đã dựng sẵn, Đã đăng\n' +
   '• /stats — Xem báo cáo các video YouTube Shorts đã xuất bản\n' +
   '• /help — Xem lại bảng hướng dẫn này\n\n' +
   '2️⃣ CÁCH DUYỆT & SỬA VIDEO KHI BOT GỬI VỀ:\n' +
@@ -183,6 +185,45 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
+      // Lệnh /kho (xem tồn kho 60 video dựng sẵn 30 ngày cho Ca Trưa & Ca Tối)
+      if (/^\/kho(@\S+)?$/i.test(txt)) {
+        var dK = getSheet_().getDataRange().getValues();
+        var bTrua = 0, bToi = 0, qTao = 0;
+        for (var rk = 1; rk < dK.length; rk++) {
+          var stK = String(dK[rk][COL_STATUS - 1]);
+          var slK = String(dK[rk][COL_SLOT - 1] || '').toUpperCase();
+          if (stK === 'DA_DUNG_SAN') {
+            if (slK === 'TRUA') bTrua++;
+            else if (slK === 'TOI') bToi++;
+          } else if (stK === 'CHO_TAO') qTao++;
+        }
+        var bTotal = bTrua + bToi;
+        var daysReady = Math.min(bTrua, bToi);
+        tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+          text: '📦 KHO DỰ TRỮ VIDEO 30 NGÀY (TRƯA & TỐI):\n'
+              + '━━━━━━━━━━━━━━━━━━━━\n'
+              + '• Tổng video đã dựng sẵn trên Drive: ' + bTotal + '/60 video\n'
+              + '  ☀️ Ca Trưa (11:30): ' + bTrua + '/30 video\n'
+              + '  🌙 Ca Tối (18:00): ' + bToi + '/30 video\n'
+              + '• Chủ đề chờ dựng (CHO_TAO): ' + qTao + ' bài\n\n'
+              + '✨ Đủ phát sóng tự động liên tục: ~' + daysReady + ' ngày!\n'
+              + '(🌅 Riêng Ca Sáng 05:00 luôn săn tin nóng & dựng trực tiếp mỗi sáng.\n'
+              + '💡 Gõ /nap_kho nếu muốn dựng nạp thêm ngay 3 video vào kho).'});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
+      // Lệnh /nap_kho (kích hoạt ngay 1 đợt dựng 3 video nạp vào kho và báo cáo về Telegram)
+      if (/^\/nap_kho(@\S+)?$/i.test(txt)) {
+        var okB = dispatchWorkflow_('buffer_factory.yml', {batch_size: '3', notify: 'true'});
+        tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+          text: okB
+            ? '⚙️ Đã kích hoạt Xưởng Sản Xuất Đệm: đang dựng thêm 3 video cất vào Kho Dự Trữ 30 Ngày (~8-10 phút nữa sẽ báo kết quả)!'
+            : '⚠️ Không gọi được buffer_factory.yml.'});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
       // Lệnh /xoa (bỏ qua dòng CHO_TAO tiếp theo trong lịch nếu không thích chủ đề đó)
       if (/^\/xoa(@\S+)?$/i.test(txt)) {
         var shX = getSheet_();
@@ -264,19 +305,19 @@ function doPost(e) {
       // Lệnh /lich
       if (txt.indexOf('/lich') === 0) {
         var data = getSheet_().getDataRange().getValues();
-        var cChoTao = 0, cChoDuyet = 0, cDaDang = 0, nextTopics = [];
+        var cChoTao = 0, cDungSan = 0, cDaDang = 0, nextTopics = [];
         for (var i = 1; i < data.length; i++) {
           var st = String(data[i][COL_STATUS - 1]);
           if (st === 'CHO_TAO') {
             cChoTao++;
             if (nextTopics.length < 3) nextTopics.push('• [' + data[i][2] + '] ' + data[i][COL_TOPIC - 1]);
-          } else if (st === 'CHO_DUYET') cChoDuyet++;
+          } else if (st === 'DA_DUNG_SAN') cDungSan++;
           else if (st === 'DA_DANG') cDaDang++;
         }
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
           text: '📊 Trạng thái lịch Google Sheets:\n'
               + '• Chờ tạo (CHO_TAO): ' + cChoTao + ' bài\n'
-              + '• Chờ duyệt (CHO_DUYET): ' + cChoDuyet + ' bài\n'
+              + '• Đã dựng sẵn trong kho (DA_DUNG_SAN): ' + cDungSan + '/60 bài\n'
               + '• Đã đăng (DA_DANG): ' + cDaDang + ' bài\n\n'
               + (nextTopics.length ? '📌 3 chủ đề sắp tới:\n' + nextTopics.join('\n') : '✨ Khi hết CHO_TAO, AI sẽ tự săn tin & sinh chủ đề mới!')
               + '\n\n🔗 Mở Sheet: https://docs.google.com/spreadsheets/d/' + DEFAULT_SHEET_ID + '/edit'});

@@ -11,7 +11,7 @@ except ImportError:  # chạy trực tiếp
 TAB = "Schedule"
 COLUMNS = ["id", "date", "slot", "topic", "bg_theme", "script_json", "caption", "status",
            "telegram_msg_id", "video_url_or_drive_id"]
-STATUSES = ("CHO_TAO", "CHO_DUYET", "DA_DUYET", "DA_HUY", "DA_DANG")
+STATUSES = ("CHO_TAO", "DANG_TAO", "DA_DUNG_SAN", "CHO_DUYET", "DA_DUYET", "DA_HUY", "DA_DANG")
 
 
 def _col_letter(i):  # 0 -> A
@@ -92,3 +92,24 @@ class SheetsClient:
             scored.append((v, f"{r['topic']} (Caption: {r['caption'][:80]})" + (f" [{v} views]" if v else "")))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [x[1] for x in scored[:n]]
+
+    def next_buffered(self, slot):
+        """Lấy video đầu tiên đã dựng sẵn trong kho (DA_DUNG_SAN) đúng theo ca (TRUA / TOI)."""
+        for r in self.rows():
+            if r["status"] == "DA_DUNG_SAN" and r["slot"] == slot and r["video_url_or_drive_id"]:
+                return r
+        return None
+
+    def buffered_counts(self):
+        """Đếm số lượng video dựng sẵn (DA_DUNG_SAN) theo từng ca."""
+        counts = {"TRUA": 0, "TOI": 0, "SANG": 0}
+        for r in self.rows():
+            if r["status"] == "DA_DUNG_SAN":
+                sl = r.get("slot") or "TRUA"
+                counts[sl] = counts.get(sl, 0) + 1
+        return counts
+
+    def protected_drive_ids(self):
+        """Danh sách drive_file_id của mọi video chưa đăng xong (DA_DUNG_SAN, CHO_DUYET, DA_DUYET, CHO_DANG_YT)."""
+        keep_st = {"DA_DUNG_SAN", "CHO_DUYET", "DA_DUYET", "CHO_DANG_YT"}
+        return [r["video_url_or_drive_id"] for r in self.rows() if r["status"] in keep_st and r["video_url_or_drive_id"]]
