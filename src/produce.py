@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "integrations"))
 
 import render_video  # noqa: E402
+import video_qa  # noqa: E402
 from drive_client import DriveClient  # noqa: E402
 from gemini_client import generate_batch_topics, generate_script, generate_topic  # noqa: E402
 from sheets_client import SheetsClient  # noqa: E402
@@ -150,11 +151,15 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         music = drive.random_music(tmp)
         render_video.render(script, a.output, music=music)
+        qa = video_qa.review_video(a.output, script)
+        qa_pass = qa.get("pass", True) and qa.get("score", 9.0) >= 6.5
+        qa_note = f"{qa.get('score', 9.0)}/10 — {qa.get('summary', 'Đạt chuẩn')}" + ("" if qa_pass else " ⚠️ (Cần xem lại)")
+
         vid = drive.upload(a.output, name=f"{row['id']}.mp4")
         drive.cleanup_old_videos(keep_latest=100)
         print(f"[drive] upload OK drive_file_id={vid}")
 
-        if not a.manual_approve:
+        if not a.manual_approve and qa_pass:
             try:
                 yt_res = youtube_uploader.upload_short(
                     a.output, script["caption"], row["topic"],
@@ -175,7 +180,7 @@ def main():
                     print(f"[facebook] CẢNH BÁO không auto-upload được Facebook Reels ({ex!r})")
 
         msg_id = bot.send_for_approval(a.output, row["id"], row["topic"], script["caption"],
-                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url)
+                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=qa_note)
         print(f"[telegram] đã gửi video msg_id={msg_id}")
 
     yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""

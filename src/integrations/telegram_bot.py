@@ -30,21 +30,22 @@ class TelegramBot:
             ]
         ]}
 
-    def send_for_approval(self, video_path, row_id, topic, caption, drive_id="", youtube_url=None, youtube_mode="", fb_url=None):
+    def send_for_approval(self, video_path, row_id, topic, caption, drive_id="", youtube_url=None, youtube_mode="", fb_url=None, qa_note=""):
         esc_cap = str(caption).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         esc_top = str(topic).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         fb_line = f"📘 <b>Facebook Reels:</b> {fb_url}\n" if fb_url else ""
+        qa_line = f"🛡️ <b>AI QA:</b> {qa_note}\n" if qa_note else ""
         if youtube_url or fb_url:
             yt_line = f"▶️ <b>YouTube ({youtube_mode or 'PUBLIC'}):</b> {youtube_url}\n" if youtube_url else ""
             text = (f"🚀 <b>ĐÃ TỰ ĐỘNG XUẤT BẢN ({row_id})</b>\n"
                     f"📌 <b>Chủ đề:</b> {esc_top}\n"
-                    f"{yt_line}{fb_line}\n"
+                    f"{yt_line}{fb_line}{qa_line}\n"
                     f"📋 <b>Chạm 1 cái vào khung dưới để Copy Caption đăng TikTok:</b>\n"
                     f"<pre>{esc_cap}</pre>\n\n"
                     f"<i>💡 Nếu muốn dựng lại bản khác, bấm 🔄 Tạo lại bên dưới.</i>")
         else:
             text = (f"🎬 <b>Chờ duyệt:</b> <code>{row_id}</code>\n"
-                    f"📌 <b>Chủ đề:</b> {esc_top}\n\n"
+                    f"📌 <b>Chủ đề:</b> {esc_top}\n{qa_line}\n"
                     f"📋 <b>Chạm 1 cái để Copy Caption:</b>\n<pre>{esc_cap}</pre>\n\n"
                     f"<i>💡 Reply tin nhắn này để sửa caption, hoặc bấm 🔄 Tạo lại để dựng kịch bản khác.</i>")
         if drive_id:

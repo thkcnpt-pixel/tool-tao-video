@@ -268,8 +268,38 @@ def _fallback_script(topic, slot, theme):
     }, slot=slot)
 
 
-def _call(model, prompt, key):
-    body = {"contents": [{"parts": [{"text": prompt}]}],
+def get_api_keys(explicit_key=None):
+    """Lấy danh sách các Gemini API Key dự phòng theo thứ tự: GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3."""
+    if explicit_key:
+        return [explicit_key]
+    keys = []
+    for name in ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"):
+        val = os.environ.get(name, "").strip()
+        if val and val not in keys:
+            keys.append(val)
+    if not keys:
+        raise RuntimeError("Thiếu GEMINI_API_KEY")
+    return keys
+
+
+def _call_with_rotation(model, prompt, keys, parts=None):
+    """Thử gọi qua từng API Key nếu gặp 429 (hết quota) hoặc 503/403."""
+    last_err = None
+    for idx, k in enumerate(keys):
+        try:
+            return _call(model, prompt, k, parts=parts), idx + 1
+        except Exception as ex:
+            last_err = ex
+            msg = str(ex)
+            if any(code in msg for code in ("HTTP 429", "HTTP 503", "HTTP 403", "quota", "RESOURCE_EXHAUSTED")):
+                print(f"[gemini] Key#{idx + 1} ({model}) bận/hết quota -> xoay sang Key kế tiếp")
+                continue
+            raise
+    raise last_err
+
+def _call(model, prompt, key, parts=None):
+    req_parts = parts if parts is not None else [{"text": prompt}]
+    body = {"contents": [{"parts": req_parts}],
             "generationConfig": {"response_mime_type": "application/json", "temperature": 0.9}}
     r = requests.post(ENDPOINT.format(model=model), headers={"x-goog-api-key": key, "Content-Type": "application/json"},
                       json=body, timeout=55)
@@ -284,16 +314,17 @@ def _call(model, prompt, key):
 
 
 def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries=1, top_hooks=()):
-    """Thử lần lượt 8 model Gemini (có exponential backoff khi 503); nếu tất cả đều 503 thì dùng Fallback Script."""
-    key = api_key or os.environ["GEMINI_API_KEY"]
+    """Thử lần lượt 8 model x 3 API Key dự phòng; nếu tất cả quá tải thì dùng Fallback Script."""
+    keys = get_api_keys(api_key)
     prompt = build_prompt(topic, slot, list(recent), theme, top_hooks=top_hooks)
     for model in MODELS:
         for attempt in range(retries + 1):
             try:
-                script = validate(_call(model, prompt, key), slot=slot)
+                raw, key_idx = _call_with_rotation(model, prompt, keys)
+                script = validate(raw, slot=slot)
                 if theme in THEMES:
                     script["bg_theme"] = theme
-                print(f"[gemini] OK model={model} voice={script['voice']} scenes={[x['type'] for x in script['scenes']]}")
+                print(f"[gemini] OK model={model} key=#{key_idx} voice={script['voice']} scenes={[x['type'] for x in script['scenes']]}")
                 return script
             except Exception as ex:
                 msg = str(ex)
@@ -306,7 +337,7 @@ def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries
 
 
 def generate_topic(slot, recent=(), api_key=None):
-    key = api_key or os.environ["GEMINI_API_KEY"]
+    keys = get_api_keys(api_key)
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     news_block = ""
     if slot == "SANG":
@@ -322,7 +353,7 @@ Hãy đề xuất 1 chủ đề video ngắn (30-40 giây) mới mẻ, thực t�
 Trả về JSON: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber"}}"""
     for model in MODELS[:5]:
         try:
-            res = _call(model, prompt, key)
+            res, _ = _call_with_rotation(model, prompt, keys)
             topic = str(res.get("topic", "")).strip()
             theme = res.get("bg_theme") if res.get("bg_theme") in THEMES else THEMES[0]
             if topic:
@@ -333,7 +364,7 @@ Trả về JSON: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_them
 
 
 def generate_batch_topics(recent=(), days=3, api_key=None):
-    key = api_key or os.environ["GEMINI_API_KEY"]
+    keys = get_api_keys(api_key)
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     headlines = fetch_tech_headlines()
     news_block = "\nTin tức AI/công nghệ mới nhất:\n" + "\n".join(f"- {h}" for h in headlines) if headlines else ""
@@ -347,7 +378,7 @@ Các chủ đề đã làm (KHÔNG TRÙNG LẶP):
 Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic": "..."}}, ...]}}"""
     for model in MODELS[:5]:
         try:
-            res = _call(model, prompt, key)
+            res, _ = _call_with_rotation(model, prompt, keys)
             items = res.get("items", [])
             out = []
             for idx, it in enumerate(items[:count]):
