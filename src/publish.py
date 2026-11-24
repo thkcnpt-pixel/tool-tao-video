@@ -13,6 +13,7 @@ from drive_client import DriveClient  # noqa: E402
 from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
 import youtube_uploader  # noqa: E402
+import facebook_uploader  # noqa: E402
 
 
 def find_target_row(sheets, video_id=None):
@@ -54,7 +55,13 @@ def main():
             return 0
         if target:
             sheets.update(target["_row"], status="DANG_TAO_LAI")
-            bot = TelegramBot()
+            fb_url = None
+        if facebook_uploader.is_configured():
+            try:
+                fb_url = facebook_uploader.upload_reel(mp4, row["caption"], row["topic"])
+            except Exception as ex:
+                print(f"[facebook] CẢNH BÁO ({ex!r})")
+        bot = TelegramBot()
             notice_mid = bot.send_text(f"🔄 Đang viết lại kịch bản & dựng video mới cho {real_id} (~2-3 phút)...")
             bot.cleanup_duplicate_replies(int(target.get("telegram_msg_id") or 0) - 1, notice_mid)
         import produce
@@ -91,6 +98,12 @@ def main():
             except Exception as ex:
                 print(f"[youtube] CẢNH BÁO không upload được YouTube ({ex!r}) -> vẫn gửi bản final về Telegram")
 
+        fb_url = None
+        if facebook_uploader.is_configured():
+            try:
+                fb_url = facebook_uploader.upload_reel(mp4, row["caption"], row["topic"])
+            except Exception as ex:
+                print(f"[facebook] CẢNH BÁO ({ex!r})")
         bot = TelegramBot()
         final_mid = bot.send_final(
             mp4,

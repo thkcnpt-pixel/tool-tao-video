@@ -17,6 +17,7 @@ from gemini_client import generate_batch_topics, generate_script, generate_topic
 from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
 import youtube_uploader  # noqa: E402
+import facebook_uploader  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 VN = datetime.timezone(datetime.timedelta(hours=7))
@@ -30,6 +31,26 @@ def current_vn_slot():
         return "TRUA"
     return "TOI"
 
+
+
+def retry_pending_youtube(sheets, drive, bot):
+    """Nếu có video hôm trước bị kẹt quota YouTube (status == CHO_DANG_YT), tự động đăng bù lên YouTube khi quota vừa reset."""
+    pending_yt = [r for r in sheets.rows() if r["status"] == "CHO_DANG_YT" and r["video_url_or_drive_id"]]
+    for row in pending_yt[:2]:
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                mp4 = str(Path(tmp) / f"{row['id']}.mp4")
+                drive.download(row["video_url_or_drive_id"], mp4)
+                yt_res = youtube_uploader.upload_short(mp4, row["caption"], row["topic"], slot=row.get("slot", ""), auto_public=True)
+                yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
+                yt_id = yt_url.rsplit("/", 1)[-1]
+                base_drv = str(row["video_url_or_drive_id"]).split("|")[0]
+                sheets.update(row["_row"], status="DA_DANG", video_url_or_drive_id=f"{base_drv}|{yt_id}")
+                bot.send_text(f"✅ Đã tự động đăng bù lên YouTube Shorts thành công cho video {row['id']}:
+▶️ {yt_url}")
+        except Exception as ex:
+            print(f"[youtube] chưa đăng bù được {row['id']} ({ex!r})")
+            break
 
 def maybe_refill_queue(sheets, now):
     """Nếu trong Sheet còn dưới 3 dòng CHO_TAO thì tự động bơm thêm 9 chủ đề (3 ngày x 3 ca)."""
@@ -123,7 +144,12 @@ def main():
     print("[sheets] đã ghi script_json + caption")
 
     drive = DriveClient()
-    yt_url, yt_mode = None, ""
+    try:
+        retry_pending_youtube(sheets, drive, bot)
+    except Exception:
+        pass
+
+    yt_url, yt_mode, fb_url, yt_quota_hit = None, "", None, False
     with tempfile.TemporaryDirectory() as tmp:
         music = drive.random_music(tmp)
         render_video.render(script, a.output, music=music)
@@ -131,7 +157,7 @@ def main():
         drive.cleanup_old_videos(keep_latest=100)
         print(f"[drive] upload OK drive_file_id={vid}")
 
-        # Tự động duyệt & đăng luôn lên YouTube Shorts cho TẤT CẢ các ca (trừ khi truyền --manual-approve)
+        # Tự động duyệt & đăng luôn lên YouTube Shorts + Facebook Reels cho TẤT CẢ các ca
         if not a.manual_approve:
             try:
                 yt_res = youtube_uploader.upload_short(a.output, script["caption"], row["topic"], slot=eff_slot, auto_public=True)
@@ -139,14 +165,27 @@ def main():
                 print(f"[youtube] Auto-Publish OK ({yt_mode}): {yt_url}")
             except Exception as ex:
                 print(f"[youtube] CẢNH BÁO không auto-upload được YouTube ({ex!r})")
+                if "quota" in str(ex).lower():
+                    yt_quota_hit = True
+
+            if facebook_uploader.is_configured():
+                try:
+                    fb_url = facebook_uploader.upload_reel(a.output, script["caption"], row["topic"])
+                except Exception as ex:
+                    print(f"[facebook] CẢNH BÁO không auto-upload được Facebook Reels ({ex!r})")
 
         msg_id = bot.send_for_approval(a.output, row["id"], row["topic"], script["caption"],
-                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode)
+                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url)
         print(f"[telegram] đã gửi video msg_id={msg_id}")
 
     yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""
     ref_val = f"{vid}|{yt_id}" if yt_id else vid
-    final_status = "DA_DANG" if yt_url else "CHO_DUYET"
+    if yt_url:
+        final_status = "DA_DANG"
+    elif yt_quota_hit:
+        final_status = "CHO_DANG_YT"
+    else:
+        final_status = "CHO_DUYET"
     sheets.update(r, video_url_or_drive_id=ref_val, telegram_msg_id=msg_id, status=final_status)
     print(f"[sheets] dòng {r}: status={final_status}, msg_id={msg_id}, ref={ref_val}")
 
