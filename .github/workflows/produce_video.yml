@@ -44,16 +44,9 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Cache Playwright Chromium browser
-        id: pw-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-
       - name: Install FFmpeg & Python dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-core
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg fonts-noto-core
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
