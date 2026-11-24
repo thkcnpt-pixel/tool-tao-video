@@ -46,12 +46,10 @@ def pick_music(explicit, theme="cyber_blue"):
 
 
 def dynamic_rate_for_segment(seg_type, base_rate):
-    """Dynamic Prosody: Hook đọc dồn dập cuốn hút (+25%), Thân bài rõ chữ (+20%), CTA chốt chắc nhịp (+22%)."""
+    """Dynamic Prosody (tự nhiên hơn): Hook nhanh vừa (+16%), thân bài & CTA theo base_rate (+12%)."""
     if seg_type == "hook":
-        return "+25%"
-    if seg_type == "cta":
-        return "+22%"
-    return "+20%" if base_rate in ("+22%", "+15%", "+8%") else base_rate
+        return "+16%"
+    return base_rate if base_rate not in ("+22%", "+20%", "+25%") else "+12%"
 
 
 def render(script, out_path, music=None, frames_dir=None, frame_ids=()):

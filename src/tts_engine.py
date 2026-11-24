@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 DEFAULT_VOICE = "vi-VN-HoaiMyNeural"
-DEFAULT_RATE = "+22%"
+DEFAULT_RATE = "+12%"
 
 STOPWORDS = {
     "và", "của", "cho", "với", "những", "các", "một", "được", "trong", "khi", "này", "đó",
@@ -172,7 +172,7 @@ def synthesize(text, out_path, voice=DEFAULT_VOICE, rate=DEFAULT_RATE, trim_head
     out_path = Path(out_path)
     events = []
     alt_voice = "vi-VN-NamMinhNeural" if voice == "vi-VN-HoaiMyNeural" else "vi-VN-HoaiMyNeural"
-    attempts = [(voice, rate), (voice, rate), (voice, "+18%"), (alt_voice, rate)]
+    attempts = [(voice, rate), (voice, rate), (voice, "+10%"), (alt_voice, rate)]
 
     last_err = None
     for idx, (v, r) in enumerate(attempts):

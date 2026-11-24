@@ -71,7 +71,7 @@ HOOK_ARCHETYPES = [
 
 SLOT_CTA_BUTTON = {
     "SANG": "➕ Follow kênh cập nhật AI mỗi sáng",
-    "TRUA": "📩 Hỗ trợ AI Pro • Zalo 0356.141.136",
+    "TRUA": "💬 Comment \"PROMPT\" nhận câu lệnh mẫu",
     "TOI": "🔖 Lưu ngay video để áp dụng khi cần",
 }
 
@@ -81,11 +81,11 @@ RSS_URLS = [
 ]
 
 SCHEMA_EXAMPLE = {
-    "badge": "TIN CÔNG NGHỆ 2026",
+    "badge": "MẸO AI THỰC CHIẾN",
     "bg_theme": "cyber_blue",
     "mascot": True,
     "voice": "vi-VN-HoaiMyNeural",
-    "voice_rate": "+22%",
+    "voice_rate": "+12%",
     "hook": {"headline": ["Dòng 1", "Dòng 2", "Dòng nhấn mạnh!"], "voiceover": "..."},
     "scenes": [
         {"type": "chat_demo", "title": "...", "user_prompt": "...", "ai_reply": "...", "voiceover": "..."},
@@ -129,7 +129,7 @@ def build_prompt(topic, slot, recent, theme=None, top_hooks=()):
     voice = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
     cta_btn = SLOT_CTA_BUTTON.get(slot, "➕ Follow kênh nhận mẹo AI mỗi ngày")
     hooks_txt = "\n".join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"
-    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (28-38 giây).
+    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (22-30 giây).
 Chủ đề: {topic}
 {SLOT_HINT.get(slot, '')}
 {f'Dùng bg_theme = "{theme}".' if theme else 'Chọn bg_theme trong: ' + ', '.join(THEMES) + '.'}
@@ -142,23 +142,26 @@ Các video hiệu quả nhất của kênh để học phong cách giật tít H
 
 Yêu cầu:
 - Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây, không markdown.
-- Tiếng Việt có dấu, tự nhiên, tuyệt đối không dùng từ mua bán lộ liễu.
+- Tiếng Việt có dấu, tự nhiên, tuyệt đối không dùng từ mua bán lộ liễu, không đọc số điện thoại/Zalo.
+- HOOK 2 GIÂY ĐẦU: hook.voiceover tối đa 12 từ, đánh thẳng vào kết quả/nỗi đau cụ thể (con số, thời gian), không chào hỏi.
+- Mỗi cảnh CHỮ TRÊN MÀN HÌNH CỰC NGẮN (ưu tiên 3-6 từ/mục) để đọc được trên điện thoại; chi tiết đưa vào voiceover.
+- badge: đặt nhãn ngắn đa dạng theo chủ đề (VD: MẸO EXCEL, PROMPT HAY, TỰ ĐỘNG HÓA, SAI LẦM AI), KHÔNG dùng lặp "TIN CÔNG NGHỆ 2026".
 - hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[len(recent) % len(HOOK_ARCHETYPES)]}
 - scenes: chọn 3 đến 4 cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
-- checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 42 ký tự).
-- ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 42 ký tự).
-- prompt_card: prompt_text là 1 câu lệnh mẫu thực tế 15-26 từ; result_note tối đa 40 ký tự.
-- myth_vs_fact: myth và fact mỗi mục tối đa 60 ký tự.
-- comparison: left_items và right_items cùng 3 mục, mỗi mục tối đa 28 ký tự. bullet_steps: đúng 3 bước, mỗi bước tối đa 60 ký tự.
+- checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 30 ký tự).
+- ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 30 ký tự).
+- prompt_card: prompt_text là 1 câu lệnh mẫu thực tế 10-18 từ; result_note tối đa 40 ký tự.
+- myth_vs_fact: myth và fact mỗi mục tối đa 40 ký tự.
+- comparison: left_items và right_items cùng 3 mục, mỗi mục tối đa 28 ký tự. bullet_steps: đúng 3 bước, mỗi bước tối đa 40 ký tự.
 - stat_card & cta: metric / highlight_metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%).
 - cta.button_text: đặt đúng là "{cta_btn}".
 - pinned_question: 1 câu hỏi mở thú vị liên quan trực tiếp đến chủ đề để đăng làm bình luận ghim kích thích người xem tranh luận.
-- Mỗi voiceover 12-26 từ (tổng toàn video 60-145 từ).
+- Mỗi voiceover 10-20 từ (tổng toàn video 50-100 từ).
 - KỸ THUẬT CÂU GHÉP VÒNG LẶP (SPLIT-SENTENCE SEAMLESS LOOP — BẮT BUỘC):
   + Câu cuối của `cta.voiceover` và câu đầu của `hook.voiceover` PHẢI LÀ 2 NỬA CỦA CÙNG MỘT CÂU TIẾNG VIỆT!
   + Cụ thể: `cta.voiceover` kết thúc bằng một cụm dẫn mở KHÔNG CÓ DẤU CHẤM CUỐI (ví dụ: "...giúp bạn tiết kiệm 70% thời gian mỗi ngày, và lý do chính là vì"), còn `hook.voiceover` bắt đầu nối tiếp luôn vào cụm đó (ví dụ: "90% người dùng AI vẫn đang làm thủ công bước này mà chưa biết...").
   + TUYỆT ĐỐI KHÔNG ĐƯỢC copy nguyên câu của hook.voiceover sang cta.voiceover!
-- mascot=true, voice="{voice}", voice_rate="+22%".
+- mascot=true, voice="{voice}", voice_rate="+12%".
 
 Cấu trúc mẫu (chỉ chọn 3-4 cảnh trong scenes):
 {json.dumps(SCHEMA_EXAMPLE, ensure_ascii=False, indent=1)}"""
@@ -220,7 +223,7 @@ def validate(s, slot=""):
     s["mascot"] = bool(s.get("mascot", True))
     if s.get("voice") not in ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"):
         s["voice"] = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
-    s.setdefault("voice_rate", "+22%")
+    s.setdefault("voice_rate", "+12%")
     h = s.get("hook")
     need(isinstance(h, dict) and str_list(h.get("headline"), 1) and h.get("voiceover"), "hook sai")
     h["headline"] = [str(x).strip()[:28] for x in h["headline"][:3]]
@@ -283,7 +286,7 @@ def _fallback_script(topic, slot, theme):
         "bg_theme": theme if theme in THEMES else "cyber_blue",
         "mascot": True,
         "voice": SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural"),
-        "voice_rate": "+22%",
+        "voice_rate": "+12%",
         "hook": {
             "headline": [l1, l2, "Áp dụng ngay!"],
             "voiceover": f"Đây là bí quyết về {topic} giúp bạn xử lý công việc nhanh gấp nhiều lần mỗi ngày.",

@@ -17,7 +17,7 @@ VN = datetime.timezone(datetime.timedelta(hours=7))
 
 # Giờ vàng phát sóng theo ca (giờ, phút) theo giờ Việt Nam UTC+7
 SLOT_SCHEDULE_VN = {
-    "SANG": (5, 0),
+    "SANG": (7, 0),  # 05:00 VN là giờ ngủ -> view lệch sang nước ngoài; dời 07:00
     "TRUA": (11, 30),
     "TOI": (18, 0),
 }
@@ -78,8 +78,7 @@ def _split_caption(caption, topic):
         f"{caption}\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 Thiện AI Thực Chiến (@thiennguyen_ai)\n"
-        "📩 Hỗ trợ AI & Nâng cấp Gemini Pro / Zalo: 0356.141.136\n"
-        "⚡ Lịch video mới mỗi ngày: 05:00 | 11:30 | 18:00\n\n"
+        "⚡ Mẹo AI thực chiến bằng tiếng Việt – video mới mỗi ngày. Bấm Đăng ký để không bỏ lỡ!\n\n"
         "#Shorts " + " ".join(tags)
     )
     return title[:100], desc.strip()
@@ -148,9 +147,10 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinne
         "snippet": {
             "title": title,
             "description": desc,
-            "tags": list(dict.fromkeys(["Shorts", "AI", "CongNghe", "Gemini", "TikTok"] + [t.lstrip("#") for t in re.findall(r"#\w+", caption)]))[:15],
+            "tags": list(dict.fromkeys(["Shorts", "MeoAI", "AIThucChien", "ThuThuatAI", "CongNgheAI", "TuDongHoa", "HocAI"] + [t.lstrip("#") for t in re.findall(r"#\w+", caption)]))[:15],
             "categoryId": "28",
             "defaultLanguage": "vi",
+            "defaultAudioLanguage": "vi",
         },
         "status": status_body,
     }
@@ -166,7 +166,7 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinne
     # Tự động thử đăng bình luận đầu tiên
     clean_line = re.sub(r"#\S+", "", caption).strip()
     q_line = pinned_question.strip() if pinned_question else "Bạn đang dùng công cụ AI nào mỗi ngày? Bình luận bên dưới nhé!"
-    comment = f"💬 {q_line}\n━━━━━━━━━━━━━━━━━━━━\n📩 Hỗ trợ AI & Nâng cấp Gemini Pro chính chủ / Zalo: 0356.141.136"
+    comment = f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
     post_top_comment(yt, vid, comment)
 
     return f"https://youtube.com/shorts/{vid}", mode_note
