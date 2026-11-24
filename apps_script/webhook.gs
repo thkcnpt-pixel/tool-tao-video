@@ -107,7 +107,7 @@ function doPost(e) {
 
         var sh = getSheet_();
         var curStatus = String(sh.getRange(r, COL_STATUS).getValue() || '');
-        if (curStatus !== 'CHO_DUYET') {
+        if (curStatus !== 'CHO_DUYET' && !(action === 'REGEN' && curStatus === 'DA_DANG')) {
           tg_('editMessageReplyMarkup', {chat_id: chatId, message_id: cb.message.message_id,
                                          reply_markup: {inline_keyboard: []}});
           dropPendingWebhook_();

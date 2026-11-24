@@ -1,10 +1,5 @@
-"""Pipeline sản xuất: Sheets -> Gemini (tự sinh chủ đề nếu hết dòng CHO_TAO) -> render -> Drive -> Telegram -> Sheets.
-
-Dùng:
-  python src/produce.py                        # lấy dòng CHO_TAO theo ca hiện tại (hết thì tự sinh chủ đề mới)
-  python src/produce.py --slot SANG            # chỉ định ca
-  python src/produce.py --seed "chủ đề"        # thêm 1 dòng CHO_TAO với chủ đề này rồi chạy
-  python src/produce.py --video-id 20261123... # tạo lại (regenerate) đúng dòng chỉ định
+"""Pipeline sản xuất & xuất bản tự động 100% (Full Auto-Approve cho mọi ca):
+Sheets (tự bơm 9 chủ đề khi < 3 bài) -> Gemini -> Render -> Drive -> Tự động đăng YouTube Shorts (Scheduled giờ vàng / Public) -> Gửi Telegram (kèm nút Tạo lại / Xóa) + Báo cáo tuần Chủ Nhật.
 """
 import argparse
 import datetime
@@ -18,9 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "integrations"))
 
 import render_video  # noqa: E402
 from drive_client import DriveClient  # noqa: E402
-from gemini_client import generate_script, generate_topic  # noqa: E402
+from gemini_client import generate_batch_topics, generate_script, generate_topic  # noqa: E402
 from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
+import youtube_uploader  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 VN = datetime.timezone(datetime.timedelta(hours=7))
@@ -35,18 +31,54 @@ def current_vn_slot():
     return "TOI"
 
 
+def maybe_refill_queue(sheets, now):
+    """Nếu trong Sheet còn dưới 3 dòng CHO_TAO thì tự động bơm thêm 9 chủ đề (3 ngày x 3 ca)."""
+    pending = [r for r in sheets.rows() if r["status"] == "CHO_TAO"]
+    if len(pending) >= 3:
+        return
+    recent = [r["topic"] for r in sheets.rows() if r["topic"]][-20:]
+    batch = generate_batch_topics(recent, days=3)
+    for idx, (sl, th, tp) in enumerate(batch):
+        d = (now + datetime.timedelta(days=1 + idx // 3)).date()
+        rid = f"{d:%Y%m%d}_{sl}_{now:%H%M}{idx}"
+        sheets.add_row(id=rid, date=f"{d:%Y-%m-%d}", slot=sl, topic=tp, bg_theme=th, status="CHO_TAO")
+    if batch:
+        print(f"[sheets] Auto-Refill: đã bơm thêm {len(batch)} chủ đề CHO_TAO vào lịch")
+
+
+def maybe_send_weekly_report(sheets, bot, now, slot):
+    """Tối Chủ Nhật (weekday == 6, ca TOI): tự động gửi Báo cáo Tổng kết Tuần về Telegram."""
+    if now.weekday() != 6 or slot != "TOI":
+        return
+    rows = sheets.rows()
+    cho_tao = sum(1 for r in rows if r["status"] == "CHO_TAO")
+    da_dang = sum(1 for r in rows if r["status"] == "DA_DANG")
+    top3 = sheets.top_performing_hooks(3)
+    top_txt = "\n".join(f"  {i+1}. {h}" for i, h in enumerate(top3)) if top3 else "  (Đang cập nhật lượt xem)"
+    bot.send_text(
+        f"📊 BÁO CÁO TỔNG KẾT TUẦN — Thiện AI Thực Chiến\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"• Tổng số video đã xuất bản: {da_dang} video\n"
+        f"• Số chủ đề sẵn sàng trong kho (CHO_TAO): {cho_tao} bài\n\n"
+        f"🏆 Top 3 video hiệu quả nhất trên YouTube Shorts:\n{top_txt}\n\n"
+        f"✨ Hệ thống vẫn đang tự động sản xuất & đăng bài 3 ca/ngày!"
+    )
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slot", choices=["SANG", "TRUA", "TOI"])
     ap.add_argument("--seed", help="thêm 1 dòng CHO_TAO với chủ đề này trước khi chạy")
     ap.add_argument("--video-id", help="chỉ định id dòng cần dựng (hoặc dựng lại)")
+    ap.add_argument("--manual-approve", action="store_true", help="nếu bật thì chỉ gửi chờ duyệt, không tự đăng YouTube ngay")
     ap.add_argument("--output", default=str(ROOT / "output" / "output.mp4"))
     a = ap.parse_args()
 
     sheets = SheetsClient()
     sheets.ensure_tab()
+    bot = TelegramBot()
     try:
-        TelegramBot().clear_pending_webhook()
+        bot.clear_pending_webhook()
     except Exception:
         pass
 
@@ -81,25 +113,49 @@ def main():
         row = sheets.next_pending(slot)
 
     r = row["_row"]
+    eff_slot = row["slot"] or slot
     print(f"[produce] dòng {r}: {row['id']} | {row['topic']}")
 
-    script = generate_script(row["topic"], row["slot"] or slot, sheets.recent_topics(15, exclude_row=r),
+    script = generate_script(row["topic"], eff_slot, sheets.recent_topics(15, exclude_row=r),
                              theme=row["bg_theme"] or None, top_hooks=sheets.top_performing_hooks(3))
     sheets.update(r, bg_theme=script["bg_theme"], script_json=json.dumps(script, ensure_ascii=False),
                   caption=script["caption"])
     print("[sheets] đã ghi script_json + caption")
 
     drive = DriveClient()
+    yt_url, yt_mode = None, ""
     with tempfile.TemporaryDirectory() as tmp:
         music = drive.random_music(tmp)
         render_video.render(script, a.output, music=music)
         vid = drive.upload(a.output, name=f"{row['id']}.mp4")
         drive.cleanup_old_videos(keep_latest=100)
         print(f"[drive] upload OK drive_file_id={vid}")
-        msg_id = TelegramBot().send_for_approval(a.output, row["id"], row["topic"], script["caption"], drive_id=vid)
-        print(f"[telegram] đã gửi tin nhắn duyệt msg_id={msg_id}")
-    sheets.update(r, video_url_or_drive_id=vid, telegram_msg_id=msg_id, status="CHO_DUYET")
-    print(f"[sheets] dòng {r}: status=CHO_DUYET, msg_id={msg_id}, drive_id={vid}")
+
+        # Tự động duyệt & đăng luôn lên YouTube Shorts cho TẤT CẢ các ca (trừ khi truyền --manual-approve)
+        if not a.manual_approve:
+            try:
+                yt_res = youtube_uploader.upload_short(a.output, script["caption"], row["topic"], slot=eff_slot, auto_public=True)
+                yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
+                print(f"[youtube] Auto-Publish OK ({yt_mode}): {yt_url}")
+            except Exception as ex:
+                print(f"[youtube] CẢNH BÁO không auto-upload được YouTube ({ex!r})")
+
+        msg_id = bot.send_for_approval(a.output, row["id"], row["topic"], script["caption"],
+                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode)
+        print(f"[telegram] đã gửi video msg_id={msg_id}")
+
+    yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""
+    ref_val = f"{vid}|{yt_id}" if yt_id else vid
+    final_status = "DA_DANG" if yt_url else "CHO_DUYET"
+    sheets.update(r, video_url_or_drive_id=ref_val, telegram_msg_id=msg_id, status=final_status)
+    print(f"[sheets] dòng {r}: status={final_status}, msg_id={msg_id}, ref={ref_val}")
+
+    # Tự động kiểm tra và bơm thêm 9 chủ đề nếu kho còn < 3 bài + gửi báo cáo tuần tối Chủ Nhật
+    try:
+        maybe_refill_queue(sheets, now)
+        maybe_send_weekly_report(sheets, bot, now, eff_slot)
+    except Exception as ex:
+        print(f"[produce] bỏ qua bước hậu kiểm ({ex!r})")
     return 0
 
 

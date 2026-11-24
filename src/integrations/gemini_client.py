@@ -9,6 +9,28 @@ import requests
 MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"]
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 THEMES = ["cyber_blue", "neon_purple", "emerald_tech", "sunset_amber"]
+
+# Bộ lọc từ ngữ nhạy cảm thương mại tránh bị TikTok bóp tương tác (shadowban)
+TIKTOK_SAFE_REPLACEMENTS = [
+    ("mua ngay", "trải nghiệm ngay"),
+    ("bán tài khoản", "hỗ trợ nâng cấp"),
+    ("mua tài khoản", "nâng cấp tài khoản"),
+    ("giá rẻ", "tối ưu chi phí"),
+    ("inbox giá", "xem ở hồ sơ kênh"),
+    ("chuyển khoản", "đăng ký"),
+    ("thanh toán", "kích hoạt"),
+    ("bán gói", "chia sẻ gói"),
+]
+
+
+def sanitize_tiktok_text(text):
+    if not isinstance(text, str):
+        return text
+    out = text
+    for bad, good in TIKTOK_SAFE_REPLACEMENTS:
+        out = out.replace(bad, good).replace(bad.capitalize(), good.capitalize())
+    return out
+
 SCENE_TYPES = {"chat_demo", "comparison", "stat_card", "bullet_steps", "prompt_card", "myth_vs_fact"}
 
 SLOT_HINT = {
@@ -157,6 +179,12 @@ def validate(s, slot=""):
             sc["right_items"] = [str(x).strip()[:36] for x in sc["right_items"]]
         elif sc["type"] == "bullet_steps":
             sc["steps"] = [str(x).strip()[:75] for x in sc["steps"]]
+    # Quét làm sạch từ nhạy cảm TikTok trên toàn bộ voiceover & caption
+    h["voiceover"] = sanitize_tiktok_text(h["voiceover"])
+    for sc in s["scenes"]:
+        sc["voiceover"] = sanitize_tiktok_text(sc["voiceover"])
+    c["voiceover"] = sanitize_tiktok_text(c["voiceover"])
+    s["caption"] = sanitize_tiktok_text(s["caption"])
     return s
 
 
@@ -225,3 +253,40 @@ Trả về JSON đúng định dạng: {{"topic": "Tên chủ đề ngắn gọn
         except Exception as ex:
             print(f"[gemini] generate_topic {model} lỗi: {ex}")
     return f"Mẹo ứng dụng AI tiết kiệm thời gian ca {slot}", THEMES[0]
+
+
+def generate_batch_topics(recent=(), days=3, api_key=None):
+    """Sinh 1 đợt 9 chủ đề (3 ngày x 3 ca SANG/TRUA/TOI) kết hợp tin nóng RSS khi kho CHO_TAO sắp cạn."""
+    key = api_key or os.environ["GEMINI_API_KEY"]
+    avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
+    headlines = fetch_tech_headlines()
+    news_block = "\nTin tức AI/công nghệ mới nhất:\n" + "\n".join(f"- {h}" for h in headlines) if headlines else ""
+    count = days * 3
+    prompt = f"""Bạn là giám đốc nội dung kênh 'Thiện AI Thực Chiến' (YouTube Shorts & TikTok).
+Hãy lập kế hoạch {count} chủ đề video ngắn (chia đều theo thứ tự SANG, TRUA, TOI cho {days} ngày tới):
+- SANG: Tin tức AI / công nghệ mới, đột phá (ưu tiên từ tin mới nhất bên dưới).
+- TRUA: So sánh tính năng Free vs Pro / tối ưu hiệu suất làm việc với AI.
+- TOI: 3 bước thực chiến / câu lệnh Prompt giải quyết công việc cụ thể.
+{news_block}
+Các chủ đề đã làm (TUYỆT ĐỐI KHÔNG TRÙNG LẶP):
+{avoid}
+
+Trả về JSON đúng cấu trúc:
+{{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic": "..."}}, ...]}}"""
+    for model in MODELS:
+        try:
+            res = _call(model, prompt, key)
+            items = res.get("items", [])
+            out = []
+            for idx, it in enumerate(items[:count]):
+                sl = it.get("slot") if it.get("slot") in ("SANG", "TRUA", "TOI") else ("SANG", "TRUA", "TOI")[idx % 3]
+                th = it.get("bg_theme") if it.get("bg_theme") in THEMES else THEMES[idx % 4]
+                tp = str(it.get("topic", "")).strip()
+                if tp:
+                    out.append((sl, th, tp))
+            if len(out) >= 3:
+                print(f"[gemini] đã sinh tự động {len(out)} chủ đề mới cho hàng đợi")
+                return out
+        except Exception as ex:
+            print(f"[gemini] generate_batch_topics {model} lỗi: {ex}")
+    return []

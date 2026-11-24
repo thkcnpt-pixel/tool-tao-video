@@ -30,11 +30,18 @@ class TelegramBot:
             ]
         ]}
 
-    def send_for_approval(self, video_path, row_id, topic, caption, drive_id=""):
-        text = (f"🎬 <b>Chờ duyệt:</b> <code>{row_id}</code>\n"
-                f"📌 <b>Chủ đề:</b> {topic}\n\n"
-                f"📝 <b>Caption:</b>\n{caption}\n\n"
-                f"<i>💡 Reply tin nhắn này để sửa caption, hoặc bấm 🔄 Tạo lại để dựng kịch bản khác.</i>")
+    def send_for_approval(self, video_path, row_id, topic, caption, drive_id="", youtube_url=None, youtube_mode=""):
+        if youtube_url:
+            text = (f"🚀 <b>ĐÃ TỰ ĐỘNG ĐĂNG YOUTUBE ({row_id})</b>\n"
+                    f"📌 <b>Chủ đề:</b> {topic}\n"
+                    f"▶️ <b>YouTube ({youtube_mode or 'PUBLIC'}):</b> {youtube_url}\n\n"
+                    f"📋 <b>Copy Caption bên dưới để đăng TikTok:</b>\n{caption}\n\n"
+                    f"<i>💡 Nếu muốn dựng lại bản khác, bấm 🔄 Tạo lại bên dưới.</i>")
+        else:
+            text = (f"🎬 <b>Chờ duyệt:</b> <code>{row_id}</code>\n"
+                    f"📌 <b>Chủ đề:</b> {topic}\n\n"
+                    f"📝 <b>Caption:</b>\n{caption}\n\n"
+                    f"<i>💡 Reply tin nhắn này để sửa caption, hoặc bấm 🔄 Tạo lại để dựng kịch bản khác.</i>")
         if drive_id:
             text += f"\n🔗 <a href=\"https://drive.google.com/file/d/{drive_id}/view\">Xem trên Drive</a>"
         with open(video_path, "rb") as f:

@@ -74,7 +74,14 @@ def _split_caption(caption, topic):
     title = first_sent[:88].strip()
     if "#shorts" not in title.lower():
         title = f"{title} #Shorts"
-    desc = f"{caption}\n\n#Shorts " + " ".join(tags)
+    desc = (
+        f"{caption}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 Thiện AI Thực Chiến (@thiennguyen_ai)\n"
+        "📩 Hỗ trợ AI & Nâng cấp Gemini Pro / Zalo: 0356.141.136\n"
+        "⚡ Lịch video mới mỗi ngày: 05:00 | 11:30 | 18:00\n\n"
+        "#Shorts " + " ".join(tags)
+    )
     return title[:100], desc.strip()
 
 
@@ -158,7 +165,7 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True):
 
     # Tự động thử đăng bình luận đầu tiên
     clean_line = re.sub(r"#\S+", "", caption).strip()
-    comment = f"📌 {clean_line}\n👉 Bạn đang dùng công cụ AI nào mỗi ngày? Bình luận bên dưới để mình chia sẻ thêm mẹo nhé!"
+    comment = f"📌 {clean_line}\n📩 Cần hỗ trợ công cụ AI hoặc nâng cấp Gemini Pro chính chủ? Nhắn Zalo mình hỗ trợ nhanh nhé: 0356.141.136\n👉 Bạn đang dùng AI nào mỗi ngày? Bình luận bên dưới nhé!"
     post_top_comment(yt, vid, comment)
 
     return f"https://youtube.com/shorts/{vid}", mode_note
