@@ -2,12 +2,12 @@ name: Produce Short Video (3 ca/ngày)
 
 on:
   schedule:
-    # Ca 1 (Sáng 05:00 VN) -> Render lúc 04:00 VN (21:00 UTC hôm trước)
-    - cron: "0 21 * * *"
-    # Ca 2 (Trưa 11:30 VN) -> Render lúc 10:30 VN (03:30 UTC)
-    - cron: "30 3 * * *"
-    # Ca 3 (Tối 18:00 VN)  -> Render lúc 17:00 VN (10:00 UTC)
-    - cron: "0 10 * * *"
+    # Ca 1 (Sáng 07:00 VN) -> Render lúc 06:00 VN (23:00 UTC hôm trước)
+    - cron: "0 23 * * *"
+    # Ca 2 (Trưa 12:00 VN) -> Render lúc 11:00 VN (04:00 UTC)
+    - cron: "0 4 * * *"
+    # Ca 3 (Tối 20:00 VN)  -> Render lúc 19:00 VN (12:00 UTC)
+    - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       slot:

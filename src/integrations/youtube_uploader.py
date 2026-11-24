@@ -17,9 +17,9 @@ VN = datetime.timezone(datetime.timedelta(hours=7))
 
 # Giờ vàng phát sóng theo ca (giờ, phút) theo giờ Việt Nam UTC+7
 SLOT_SCHEDULE_VN = {
-    "SANG": (7, 0),  # 05:00 VN là giờ ngủ -> view lệch sang nước ngoài; dời 07:00
-    "TRUA": (11, 30),
-    "TOI": (18, 0),
+    "SANG": (7, 0),    # đi làm/đi học, lướt điện thoại buổi sáng
+    "TRUA": (12, 0),   # nghỉ trưa
+    "TOI": (20, 0),    # khung vàng tối sau bữa cơm
 }
 
 

@@ -22,7 +22,7 @@ from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
 
 VN = datetime.timezone(datetime.timedelta(hours=7))
-TARGET_PER_SLOT = 30  # 30 Trưa + 30 Tối = 60 video dựng sẵn (đủ phát 30 ngày liên tục)
+TARGET_PER_SLOT = 7  # 30 Trưa + 30 Tối = 60 video dựng sẵn (đủ phát 30 ngày liên tục)
 
 
 def pick_needed_slot(counts):

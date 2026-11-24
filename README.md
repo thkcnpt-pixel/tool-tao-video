@@ -9,9 +9,9 @@ Hệ thống sản xuất & phân phối video ngắn `9:16` (`1080×1920`, `30f
 - [x] **Giai đoạn 4 – GitHub Actions Cron 3 ca/ngày & Upload YouTube Shorts** (`produce_video.yml`, `publish_video.yml`, `youtube_uploader.py` chế độ Private)
 
 ## Lịch chạy tự động hàng ngày (Giờ Việt Nam UTC+7)
-- **Ca 1 (Sáng):** Render lúc `04:00` (`0 21 * * *` UTC) → gửi Telegram duyệt để đăng khung `05:00`.
-- **Ca 2 (Trưa):** Render lúc `10:30` (`30 3 * * *` UTC) → gửi Telegram duyệt để đăng khung `11:30`.
-- **Ca 3 (Tối):** Render lúc `17:00` (`0 10 * * *` UTC) → gửi Telegram duyệt để đăng khung `18:00`.
+- **Ca 1 (Sáng):** Render lúc `06:00` (`0 23 * * *` UTC) → đăng khung `07:00`.
+- **Ca 2 (Trưa):** Render lúc `11:00` (`0 4 * * *` UTC) → đăng khung `12:00`.
+- **Ca 3 (Tối):** Render lúc `19:00` (`0 12 * * *` UTC) → đăng khung `20:00`.
 
 ## Lệnh chạy thủ công (khi cần)
 ```bash

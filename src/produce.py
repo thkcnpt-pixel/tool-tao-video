@@ -49,9 +49,9 @@ def build_community_post(topic, script):
 
 def current_vn_slot():
     h = datetime.datetime.now(VN).hour
-    if h < 8:
+    if h < 9:
         return "SANG"
-    if h < 15:
+    if h < 16:
         return "TRUA"
     return "TOI"
 
