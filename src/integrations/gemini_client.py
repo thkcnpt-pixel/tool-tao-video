@@ -60,6 +60,14 @@ SLOT_VOICE = {
 }
 
 # Nút CTA biến thiên thông minh theo từng ca phát sóng (Slot-Aware Conversion CTA)
+
+HOOK_ARCHETYPES = [
+    "CÔNG THỨC HOOK 1 (Cảnh báo sai lầm): Mở đầu bằng 'Đừng...' hoặc chỉ ra sai lầm 90% người dùng đang mắc phải khiến mất thời gian.",
+    "CÔNG THỨC HOOK 2 (Con số & Tốc độ gây sốc): Mở đầu bằng con số đối lập mạnh (VD: '100 trang trong 10 giây', '3 tiếng còn 5 phút').",
+    "CÔNG THỨC HOOK 3 (Bí mật thực chiến): Mở đầu kích thích tò mò ('Ít ai biết tính năng ẩn này...', 'Câu lệnh giúp mình tiết kiệm 2 giờ mỗi ngày').",
+    "CÔNG THỨC HOOK 4 (Câu hỏi trực diện): Mở đầu chạm đúng nỗi đau công việc ('Còn làm thủ công việc này?', 'Khi nào nên nâng cấp AI?').",
+]
+
 SLOT_CTA_BUTTON = {
     "SANG": "➕ Follow kênh cập nhật AI mỗi sáng",
     "TRUA": "📩 Hỗ trợ AI Pro • Zalo 0356.141.136",
@@ -134,7 +142,7 @@ Các video hiệu quả nhất của kênh để học phong cách giật tít H
 Yêu cầu:
 - Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây, không markdown.
 - Tiếng Việt có dấu, tự nhiên, tuyệt đối không dùng từ mua bán lộ liễu.
-- hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh.
+- hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[len(recent) % len(HOOK_ARCHETYPES)]}
 - scenes: chọn 3 đến 4 cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
 - checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 42 ký tự).
 - ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 42 ký tự).

@@ -60,6 +60,7 @@ def main():
 
     sheets = SheetsClient()
     sheets.ensure_tab()
+    sheets.recover_stale_locks()
     drive = DriveClient()
     top_hooks = sheets.top_performing_hooks(3)
     made = []

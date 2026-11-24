@@ -59,7 +59,7 @@ Chỉ trả về JSON hợp lệ theo mẫu:
         {"inline_data": {"mime_type": "image/png", "data": img_b64}},
     ]
 
-    for model in ("gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"):
+    for model in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.1-flash-lite"):
         try:
             res, key_idx = gemini_client._call_with_rotation(model, prompt, qa_keys, parts=parts)
             passed = bool(res.get("pass", True))

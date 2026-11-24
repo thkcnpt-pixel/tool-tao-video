@@ -72,6 +72,7 @@ var HELP_TEXT =
   '• /xoa — Bỏ qua (hủy) chủ đề CHO_TAO tiếp theo trong hàng đợi\n' +
   '• /sang, /trua, /toi — Dựng ngay 1 video cho Ca Sáng / Trưa / Tối\n' +
   '• /kho — Xem tồn kho 60 video dựng sẵn 30 ngày (Trưa & Tối)\n' +
+  '• /xem_kho — Xem danh sách & link Drive 5 video dựng sẵn sắp phát\n' +
   '• /nap_kho — Ra lệnh dựng nạp thêm ngay 3 video vào kho dự trữ\n' +
   '• /lich — Xem số bài Chờ tạo, Đã dựng sẵn, Đã đăng\n' +
   '• /stats — Xem báo cáo các video YouTube Shorts đã xuất bản\n' +
@@ -209,6 +210,27 @@ function doPost(e) {
               + '✨ Đủ phát sóng tự động liên tục: ~' + daysReady + ' ngày!\n'
               + '(🌅 Riêng Ca Sáng 05:00 luôn săn tin nóng & dựng trực tiếp mỗi sáng.\n'
               + '💡 Gõ /nap_kho nếu muốn dựng nạp thêm ngay 3 video vào kho).'});
+        dropPendingWebhook_();
+        return ContentService.createTextOutput('ok');
+      }
+
+      // Lệnh /xem_kho (xem danh sách & link mở nhanh Google Drive của các video đã dựng sẵn trong kho)
+      if (/^\/xem_kho(@\S+)?$/i.test(txt)) {
+        var dXK = getSheet_().getDataRange().getValues();
+        var itemsXK = [];
+        for (var rxk = 1; rxk < dXK.length; rxk++) {
+          if (String(dXK[rxk][COL_STATUS - 1]) === 'DA_DUNG_SAN') {
+            var drvId = String(dXK[rxk][COL_REF - 1] || '').split('|')[0];
+            var link = drvId ? ('https://drive.google.com/file/d/' + drvId + '/view') : '';
+            itemsXK.push((itemsXK.length + 1) + '. [' + dXK[rxk][COL_SLOT - 1] + '] ' + dXK[rxk][COL_TOPIC - 1]
+                         + (link ? '\n   🔗 ' + link : ''));
+            if (itemsXK.length >= 6) break;
+          }
+        }
+        tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
+          text: itemsXK.length
+            ? ('🎬 CÁC VIDEO ĐÃ DỰNG SẴN TRONG KHO (Bấm link để xem trước / tải về):\n\n' + itemsXK.join('\n\n'))
+            : '📭 Hiện chưa có video nào ở trạng thái DA_DUNG_SAN. Gõ /nap_kho để dựng ngay!'});
         dropPendingWebhook_();
         return ContentService.createTextOutput('ok');
       }

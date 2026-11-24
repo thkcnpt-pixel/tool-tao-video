@@ -113,3 +113,21 @@ class SheetsClient:
         """Danh sách drive_file_id của mọi video chưa đăng xong (DA_DUNG_SAN, CHO_DUYET, DA_DUYET, CHO_DANG_YT)."""
         keep_st = {"DA_DUNG_SAN", "CHO_DUYET", "DA_DUYET", "CHO_DANG_YT"}
         return [r["video_url_or_drive_id"] for r in self.rows() if r["status"] in keep_st and r["video_url_or_drive_id"]]
+
+    def recover_stale_locks(self):
+        """Giải cứu các dòng bị kẹt ở trạng thái DANG_TAO / DANG_DANG do job trước bị hủy giữa chừng."""
+        recovered = 0
+        for r in self.rows():
+            st = r.get("status", "")
+            ref = str(r.get("video_url_or_drive_id", "")).strip()
+            if st in ("DANG_TAO", "DANG_TAO_LAI"):
+                new_st = "DA_DUNG_SAN" if ref else "CHO_TAO"
+                self.update(r["_row"], status=new_st)
+                recovered += 1
+            elif st == "DANG_DANG" and ref:
+                new_st = "DA_DANG" if "|" in ref else "DA_DUNG_SAN"
+                self.update(r["_row"], status=new_st)
+                recovered += 1
+        if recovered:
+            print(f"[sheets] đã tự động giải cứu {recovered} dòng bị kẹt trạng thái")
+        return recovered

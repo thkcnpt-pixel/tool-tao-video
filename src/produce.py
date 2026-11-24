@@ -152,6 +152,7 @@ def main():
 
     sheets = SheetsClient()
     sheets.ensure_tab()
+    sheets.recover_stale_locks()
     bot = TelegramBot()
     drive = DriveClient()
     try:

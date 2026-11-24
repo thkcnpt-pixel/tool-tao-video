@@ -1,4 +1,4 @@
-"""FFmpeg: ghép nền + lớp UI/Robot/phụ đề + giọng đọc + SFX + nhạc nền có Sidechain Ducking + Thumbnail."""
+"""FFmpeg: ghép nền + lớp UI/Robot/phụ đề + giọng đọc + Micro-SFX Choreography + nhạc nền Studio Sidechain Ducking."""
 import subprocess
 from pathlib import Path
 import wave
@@ -10,44 +10,82 @@ FPS = 30
 SR = 44100
 
 
+def _add_tone(buf, start_sec, dur_sec, freq_start, freq_end=None, vol=0.14, attack=0.005, decay=18.0, harmonic=0.4):
+    """Chèn 1 hiệu ứng âm thanh ngắn (chirp/ding/pop) vào buffer tại đúng mốc thời gian."""
+    n = len(buf)
+    s0 = int(start_sec * SR)
+    dur = int(dur_sec * SR)
+    if s0 < 0 or s0 + dur >= n or dur <= 0:
+        return
+    t = np.arange(dur, dtype=np.float32) / SR
+    if freq_end is not None and freq_end != freq_start:
+        # Nội suy tần số mượt
+        inst_f = freq_start + (freq_end - freq_start) * (t / dur_sec)
+        phase = 2 * np.pi * np.cumsum(inst_f) / SR
+    else:
+        phase = 2 * np.pi * freq_start * t
+    env = np.exp(-t * decay) * np.minimum(t / max(attack, 0.001), 1.0)
+    wave_sig = np.sin(phase) + harmonic * np.sin(phase * 2.0)
+    buf[s0:s0 + dur] += vol * wave_sig * env
+
+
 def _make_sfx_track(timeline, workdir):
-    """Sinh track SFX nhẹ (whoosh đầu mỗi cảnh + pop nhẹ khi robot bay tới waypoint + tick ở cảnh có số nhảy)."""
+    """Thiết kế Micro-SFX khớp từng chuyển động hình ảnh để giữ chân người xem (Audio-Visual Retention):
+    1. Opening Hook Riser + Crystal Ding (0.0s -> 0.35s) khi chữ Hook zoom-in.
+    2. Soft Transition Whoosh đầu mỗi cảnh.
+    3. Typing Keyboard Ticks khi gõ chữ ở chat_demo / prompt_card.
+    4. Ascending Melodic Pops (C5 -> E5 -> G5 -> C6) khi từng dòng bảng so sánh / bước / checklist / ranking bật sáng.
+    5. Digital Counter Ticks + Reward Chime khi số lớn (10X, 70%) nhảy ở stat_card / cta.
+    6. Seamless Loop Bridge Whoosh ở 0.18s cuối video nối mượt về giây 0:00.
+    """
     total = timeline["total"]
     n = int(total * SR)
     buf = np.zeros(n, dtype=np.float32)
 
-    # Opening Hook Chime (0.02s..0.28s): âm thanh mở màn sáng gọn giữ chân người xem trong 0.3s đầu
-    hdur = min(int(0.26 * SR), n)
-    if hdur > 0:
-        ht = np.arange(hdur, dtype=np.float32) / SR
-        henv = np.exp(-ht * 14) * np.minimum(ht / 0.005, 1.0)
-        buf[:hdur] += 0.20 * (np.sin(2 * np.pi * 1046.5 * ht) + 0.6 * np.sin(2 * np.pi * 1567.98 * ht)) * henv
+    # 1) Opening Hook Riser (0.01s -> 0.22s) + Crystal Chime (0.20s)
+    _add_tone(buf, 0.01, 0.22, 240.0, 920.0, vol=0.14, attack=0.02, decay=6.0, harmonic=0.25)
+    _add_tone(buf, 0.20, 0.28, 1046.5, 1567.98, vol=0.18, attack=0.004, decay=14.0, harmonic=0.5)
+
+    triad_notes = [523.25, 659.25, 783.99, 1046.50]  # C5, E5, G5, C6
 
     for seg in timeline["segments"]:
-        s0 = int(seg["start"] * SR)
-        dur = int(0.22 * SR)
-        if s0 + dur < n:
-            t = np.arange(dur, dtype=np.float32) / SR
-            freq = 260 + 420 * np.exp(-t * 14)
-            env = np.sin(np.pi * t / 0.22) ** 1.5
-            buf[s0:s0 + dur] += 0.16 * np.sin(2 * np.pi * freq * t) * env
+        st = seg["start"]
+        dur = seg["dur"]
+        stype = seg.get("type", "")
 
-        # Tiếng tick nhẹ khi số nhảy ở stat_card / cta
-        if seg.get("type") in ("stat_card", "cta"):
-            for k in range(5):
-                tk0 = int((seg["start"] + 0.12 + k * 0.11) * SR)
-                tdur = int(0.03 * SR)
-                if tk0 + tdur < n:
-                    tt = np.arange(tdur, dtype=np.float32) / SR
-                    buf[tk0:tk0 + tdur] += 0.09 * np.sin(2 * np.pi * (1100 + k * 90) * tt) * np.exp(-tt * 90)
+        # 2) Soft Whoosh đầu mỗi cảnh
+        _add_tone(buf, st, 0.20, 220.0, 540.0, vol=0.13, attack=0.03, decay=11.0, harmonic=0.15)
 
-        # Tiếng chime/pop êm ở giữa cảnh
-        s1 = int((seg["start"] + seg["dur"] * 0.45) * SR)
-        dur1 = int(0.12 * SR)
-        if s1 + dur1 < n:
-            t = np.arange(dur1, dtype=np.float32) / SR
-            env = np.exp(-t * 28) * np.minimum(t / 0.004, 1.0)
-            buf[s1:s1 + dur1] += 0.12 * (np.sin(2 * np.pi * 880 * t) + 0.5 * np.sin(2 * np.pi * 1320 * t)) * env
+        # 3) Theo từng loại cảnh UI
+        if stype in ("chat_demo", "prompt_card"):
+            # Tiếng gõ phím cơ mềm (tock-tock) lúc gõ prompt (12% -> 46% thời lượng cảnh)
+            for k in range(8):
+                tk_sec = st + dur * (0.12 + k * 0.042)
+                _add_tone(buf, tk_sec, 0.025, 1400.0 + (k % 3) * 180.0, 600.0, vol=0.07, attack=0.002, decay=85.0, harmonic=0.2)
+            # Tiếng Pop sáng khi thẻ AI Reply / Kết quả bật lên ở 52%
+            _add_tone(buf, st + dur * 0.52, 0.16, 880.0, 1318.5, vol=0.15, attack=0.004, decay=22.0, harmonic=0.45)
+
+        elif stype in ("comparison", "bullet_steps", "checklist_card", "ranking_card"):
+            # Tiếng Pop nốt nhạc tăng dần (C5 -> E5 -> G5) mỗi khi 1 dòng / 1 bước / 1 hạng bật sáng
+            for idx in range(3):
+                pop_sec = st + dur * (0.15 + idx * 0.25)
+                note = triad_notes[idx % len(triad_notes)]
+                _add_tone(buf, pop_sec, 0.14, note, note * 1.25, vol=0.14, attack=0.003, decay=24.0, harmonic=0.4)
+
+        elif stype == "myth_vs_fact":
+            # Tiếng Buzz trầm nhẹ ở thẻ Sai lầm ❌ (0.08) + Tiếng Ding xanh sáng ở thẻ Cách làm đúng ✅ (0.48)
+            _add_tone(buf, st + dur * 0.08, 0.15, 240.0, 180.0, vol=0.12, attack=0.005, decay=18.0, harmonic=0.6)
+            _add_tone(buf, st + dur * 0.48, 0.20, 783.99, 1174.66, vol=0.16, attack=0.004, decay=18.0, harmonic=0.45)
+
+        elif stype in ("stat_card", "cta"):
+            # Tiếng Digital Counter Ticks khi số nhảy (0.10s -> 0.65s) + Tiếng Reward Ding khi chốt số (0.68s)
+            for k in range(6):
+                _add_tone(buf, st + 0.10 + k * 0.09, 0.028, 1050.0 + k * 110.0, None, vol=0.09, attack=0.002, decay=90.0)
+            _add_tone(buf, st + 0.68, 0.22, 1174.66, 1567.98, vol=0.16, attack=0.004, decay=16.0, harmonic=0.5)
+
+    # 6) Seamless Loop Bridge Whoosh ở 0.18s cuối cùng của video nối mượt về 0:00
+    if total > 1.0:
+        _add_tone(buf, total - 0.18, 0.17, 300.0, 760.0, vol=0.14, attack=0.02, decay=9.0, harmonic=0.2)
 
     pcm = (np.clip(buf, -1.0, 1.0) * 32767).astype(np.int16)
     sfx_path = Path(workdir) / "sfx.wav"
@@ -76,7 +114,6 @@ def build_voice_track(seg_audios, durations, workdir):
 
 
 def extract_thumbnail(video_path, thumb_path=None, at_sec=1.2):
-    """Trích xuất khung hình Hook nét nhất (giây 1.2s) làm ảnh bìa thumbnail.jpg."""
     thumb_path = Path(thumb_path or str(Path(video_path).with_suffix(".jpg")))
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-ss", f"{at_sec:.2f}", "-i", str(video_path),
@@ -85,7 +122,8 @@ def extract_thumbnail(video_path, thumb_path=None, at_sec=1.2):
     return thumb_path if thumb_path.exists() else None
 
 
-def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volume=0.18, save_dir=None):
+def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volume=0.24, save_dir=None):
+    """Ghép video với nhạc nền ở mức 0.24 (đã có EQ Vocal Pocket + Sidechain Ducking tự hạ xuống khi có tiếng đọc và nổi lên ở khoảng nghỉ)."""
     total = timeline["total"]
     sfx_path = _make_sfx_track(timeline, Path(voice_path).parent)
     cmd = ["ffmpeg", "-y", "-loglevel", "error",
@@ -95,18 +133,17 @@ def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volu
            "-i", str(sfx_path)]
     if music_path:
         cmd += ["-stream_loop", "-1", "-i", str(music_path)]
-        # Sidechain Ducking: khi có giọng đọc thì nhạc nền tự động dịu xuống, khi chuyển cảnh nhạc nổi lên
         fc = (
             "[0:v][1:v]overlay=0:0:format=auto,format=yuv420p[v];"
-            "[2:a]volume=1.35,asplit=2[vo][sc];"
-            "[3:a]volume=0.25[sfx];"
-            f"[4:a]volume={music_volume}[mraw];"
-            "[mraw][sc]sidechaincompress=threshold=0.03:ratio=4:attack=15:release=250[m];"
+            "[2:a]volume=1.38,asplit=2[vo][sc];"
+            "[3:a]volume=0.32[sfx];"
+            f"[4:a]volume={music_volume},equalizer=f=1500:t=q:w=1.2:g=-3.5[mraw];"
+            "[mraw][sc]sidechaincompress=threshold=0.025:ratio=3.8:attack=12:release=220[m];"
             "[vo][sfx][m]amix=inputs=3:duration=first:normalize=0,alimiter=limit=0.96[a]"
         )
     else:
         fc = ("[0:v][1:v]overlay=0:0:format=auto,format=yuv420p[v];"
-              "[2:a]volume=1.35[vo];[3:a]volume=0.25[sfx];"
+              "[2:a]volume=1.38[vo];[3:a]volume=0.32[sfx];"
               "[vo][sfx]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.96[a]")
     cmd += ["-filter_complex", fc, "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}", "-r", str(FPS),
             "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
