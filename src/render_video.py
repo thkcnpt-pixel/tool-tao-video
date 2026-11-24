@@ -14,7 +14,7 @@ import video_composer  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 PAD = 0.18
-PAD_LAST = 0.05
+PAD_LAST = 0.0
 
 # Khớp nhạc nền theo đúng màu chủ đề / tâm trạng video (Theme-Matched Soundtrack)
 THEME_MUSIC_MAP = {
@@ -65,7 +65,7 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
         for i, s in enumerate(segs):
             a = Path(tmp) / f"tts_{i}.mp3"
             seg_rate = dynamic_rate_for_segment(s["type"], base_rate)
-            d, chunks = tts_engine.synthesize(s["voiceover"], a, voice, seg_rate)
+            d, chunks = tts_engine.synthesize(s["voiceover"], a, voice, seg_rate, trim_head=(i == 0), is_loop_tail=(i == len(segs) - 1))
             for c in chunks:
                 c["id"] = cid
                 cid += 1

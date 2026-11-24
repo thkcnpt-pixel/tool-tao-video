@@ -1,6 +1,7 @@
 """Gemini API (Free) với 8 model dự phòng + Fallback Template chống lỗi 503 tuyệt đối + 8 loại cảnh + Slot-Aware CTA + Smart Pinned Question."""
 import json
 import os
+import re
 import time
 import xml.etree.ElementTree as ET
 
@@ -153,12 +154,59 @@ Yêu cầu:
 - cta.button_text: đặt đúng là "{cta_btn}".
 - pinned_question: 1 câu hỏi mở thú vị liên quan trực tiếp đến chủ đề để đăng làm bình luận ghim kích thích người xem tranh luận.
 - Mỗi voiceover 12-26 từ (tổng toàn video 60-145 từ).
-- SEAMLESS LOOP: Câu cuối của cta.voiceover kết thúc sao cho khi lặp lại về giây 0:00 (hook.voiceover) nghe liền mạch tự nhiên!
+- KỸ THUẬT CÂU GHÉP VÒNG LẶP (SPLIT-SENTENCE SEAMLESS LOOP — BẮT BUỘC):
+  + Câu cuối của `cta.voiceover` và câu đầu của `hook.voiceover` PHẢI LÀ 2 NỬA CỦA CÙNG MỘT CÂU TIẾNG VIỆT!
+  + Cụ thể: `cta.voiceover` kết thúc bằng một cụm dẫn mở KHÔNG CÓ DẤU CHẤM CUỐI (ví dụ: "...giúp bạn tiết kiệm 70% thời gian mỗi ngày, và lý do chính là vì"), còn `hook.voiceover` bắt đầu nối tiếp luôn vào cụm đó (ví dụ: "90% người dùng AI vẫn đang làm thủ công bước này mà chưa biết...").
+  + TUYỆT ĐỐI KHÔNG ĐƯỢC copy nguyên câu của hook.voiceover sang cta.voiceover!
 - mascot=true, voice="{voice}", voice_rate="+22%".
 
 Cấu trúc mẫu (chỉ chọn 3-4 cảnh trong scenes):
 {json.dumps(SCHEMA_EXAMPLE, ensure_ascii=False, indent=1)}"""
 
+
+
+LOOP_BRIDGES = (
+    "và lý do chính là vì",
+    "bởi vì sự thật là",
+    "và điều ít ai để ý là",
+    "nhưng hãy nhớ một điều là",
+    "và bí quyết cốt lõi nằm ở chỗ",
+    "bởi ngay lúc này",
+    "và để hiểu tại sao thì",
+)
+
+
+def _enforce_seamless_loop(hook_obj, cta_obj, topic):
+    """Đảm bảo 100% cuối cta.voiceover và đầu hook.voiceover ghép thành 1 câu tiếng Việt liền mạch không dấu chấm ngắt."""
+    h_vo = str(hook_obj.get("voiceover", "")).strip()
+    c_vo = str(cta_obj.get("voiceover", "")).strip()
+
+    if c_vo.lower() == h_vo.lower() or len(c_vo) < 15:
+        metric = cta_obj.get("highlight_metric", "70%")
+        summary = cta_obj.get("summary", "tối ưu hiệu suất làm việc mỗi ngày")
+        c_vo = f"Áp dụng ngay để đạt hiệu quả {metric}, {summary.lower()}"
+
+    # Bỏ các câu chào đóng kín ở cuối CTA và các từ nối cụt lửng
+    c_vo = re.sub(r"[.?!…]+\s*(Đừng quên|Hãy bấm|Nhớ bấm|Chúc các bạn)[^.?!…]*[.?!…]*$", "", c_vo, flags=re.I).strip()
+    c_vo = c_vo.rstrip(".?!…,; ")
+    c_vo = re.sub(r"(?:,?\s+(?:và|nhưng|hoặc|bởi|vì|để|để bắt đầu|nhé|nha))+$", "", c_vo, flags=re.I).rstrip(".?!…,; ")
+
+    lower_c = c_vo.lower()
+    has_bridge = any(lower_c.endswith(b) for b in LOOP_BRIDGES)
+    if not has_bridge:
+        lower_h = h_vo.lower()
+        first_clause = re.split(r"[.?!]", h_vo)[0]
+        if "?" in first_clause or lower_h.startswith(("tại sao", "làm sao", "khi nào", "có nên", "bạn có")):
+            bridge = "và đã bao giờ bạn tự hỏi"
+        elif lower_h.startswith(("đừng", "hãy", "chỉ cần", "thử")):
+            bridge = "nhưng trước hết"
+        elif re.match(r"^(\d+|hơn|chỉ|tới|năm)", lower_h):
+            bridge = "và thực tế đáng kinh ngạc là"
+        else:
+            bridge = "và điều tuyệt vời nhất là"
+        c_vo = f"{c_vo}, {bridge}"
+
+    cta_obj["voiceover"] = c_vo
 
 def validate(s, slot=""):
     def need(cond, msg):
@@ -221,6 +269,7 @@ def validate(s, slot=""):
         sc["voiceover"] = sanitize_tiktok_text(sc["voiceover"])
     c["voiceover"] = sanitize_tiktok_text(c["voiceover"])
     s["caption"] = sanitize_tiktok_text(s["caption"])
+    _enforce_seamless_loop(h, c, s.get("caption", ""))
     return s
 
 
