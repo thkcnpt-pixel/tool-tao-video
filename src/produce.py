@@ -26,6 +26,27 @@ ROOT = Path(__file__).resolve().parent.parent
 VN = datetime.timezone(datetime.timedelta(hours=7))
 
 
+
+def build_community_post(topic, script):
+    """Tạo bài viết ngắn 3 gạch đầu dòng từ kịch bản để chủ kênh chạm 1 cái copy đăng Zalo / Tab Cộng đồng YouTube."""
+    try:
+        pts = []
+        for sc in script.get("scenes", [])[:3]:
+            t = sc.get("type")
+            if t == "bullet_steps" and sc.get("steps"):
+                pts.extend(sc["steps"][:2])
+            elif t == "checklist_card" and sc.get("items"):
+                pts.extend(sc["items"][:2])
+            elif t == "myth_vs_fact" and sc.get("fact"):
+                pts.append(sc["fact"])
+            elif sc.get("title"):
+                pts.append(sc["title"])
+        bullets = "\n".join(f"✅ {p}" for p in pts[:3])
+        return (f"🤖 {topic}\n{bullets}\n"
+                f"📩 Hỗ trợ AI & Nâng cấp Gemini Pro: Zalo 0356.141.136")[:320]
+    except Exception:
+        return ""
+
 def current_vn_slot():
     h = datetime.datetime.now(VN).hour
     if h < 8:
@@ -97,9 +118,11 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
     rem = buf_left.get("TRUA", 0) + buf_left.get("TOI", 0)
     print(f"[vault] Xuất kho siêu tốc dòng {r} [{eff_slot}]: {row['id']} | drive_id={vid} (Còn {rem}/60 bài trong kho)")
 
-    pinned_q = ""
+    pinned_q, comm_txt = "", ""
     try:
-        pinned_q = json.loads(row.get("script_json") or "{}").get("pinned_question", "")
+        sc_obj = json.loads(row.get("script_json") or "{}")
+        pinned_q = sc_obj.get("pinned_question", "")
+        comm_txt = build_community_post(row["topic"], sc_obj)
     except Exception:
         pass
 
@@ -131,7 +154,7 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
         vault_note = f"Đã kiểm duyệt sẵn • Tồn kho còn {rem}/60 video"
         msg_id = bot.send_for_approval(
             mp4, row["id"], row["topic"], row["caption"],
-            drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=vault_note,
+            drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=vault_note, community_post=comm_txt,
         )
 
     yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""
@@ -259,7 +282,7 @@ def main():
                     print(f"[facebook] CẢNH BÁO ({ex!r})")
 
         msg_id = bot.send_for_approval(a.output, row["id"], row["topic"], script["caption"],
-                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=qa_note)
+                                       drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=qa_note, community_post=build_community_post(row["topic"], script))
 
     yt_id = yt_url.rsplit("/", 1)[-1] if yt_url else ""
     ref_val = f"{vid}|{yt_id}" if yt_id else vid

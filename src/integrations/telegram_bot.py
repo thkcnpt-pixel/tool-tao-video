@@ -35,7 +35,7 @@ class TelegramBot:
             {"text": "❌ Hủy", "callback_data": f"REJECT:{row_id}"},
         ]]}
 
-    def send_for_approval(self, video_path, row_id, topic, caption, drive_id="", youtube_url=None, youtube_mode="", fb_url=None, qa_note=""):
+    def send_for_approval(self, video_path, row_id, topic, caption, drive_id="", youtube_url=None, youtube_mode="", fb_url=None, qa_note="", community_post=""):
         esc_cap = str(caption).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         esc_top = str(topic).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         esc_qa = str(qa_note).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -46,8 +46,9 @@ class TelegramBot:
             text = (f"🚀 <b>ĐÃ TỰ ĐỘNG XUẤT BẢN ({row_id})</b>\n"
                     f"📌 <b>Chủ đề:</b> {esc_top}\n"
                     f"{yt_line}{fb_line}{qa_line}\n"
-                    f"📋 <b>Chạm 1 cái vào khung dưới để Copy Caption đăng TikTok:</b>\n"
-                    f"<pre>{esc_cap}</pre>")
+                    f"📋 <b>Chạm 1 cái để Copy Caption TikTok:</b>\n"
+                    f"<pre>{esc_cap}</pre>"
+                    + (f"\n\n📝 <b>Chạm 1 cái để Copy Bài Đăng Zalo / Tab Cộng Đồng YT:</b>\n<pre>{str(community_post).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')}</pre>" if community_post else ""))
         else:
             text = (f"🎬 <b>Chờ duyệt:</b> <code>{row_id}</code>\n"
                     f"📌 <b>Chủ đề:</b> {esc_top}\n{qa_line}\n"

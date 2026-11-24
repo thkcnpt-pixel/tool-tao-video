@@ -137,7 +137,7 @@ def compose(timeline, bg_path, voice_path, out_path, music_path=None, music_volu
             "[0:v][1:v]overlay=0:0:format=auto,format=yuv420p[v];"
             "[2:a]volume=1.38,asplit=2[vo][sc];"
             "[3:a]volume=0.32[sfx];"
-            f"[4:a]volume={music_volume},equalizer=f=1500:t=q:w=1.2:g=-3.5[mraw];"
+            f"[4:a]volume={music_volume},extrastereo=m=1.35,equalizer=f=1500:t=q:w=1.2:g=-3.8[mraw];"
             "[mraw][sc]sidechaincompress=threshold=0.025:ratio=3.8:attack=12:release=220[m];"
             "[vo][sfx][m]amix=inputs=3:duration=first:normalize=0,alimiter=limit=0.96[a]"
         )
