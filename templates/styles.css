@@ -14,10 +14,14 @@
   --accent: #38bdf8; --accent2: #818cf8; --pop: #fde047;
   --glass: rgba(5, 10, 26, 0.84); --glass-line: rgba(255,255,255,0.26);
 }
-.theme-cyber_blue    { --accent: #38bdf8; --accent2: #818cf8; --pop: #fde047; --glass: rgba(4, 10, 28, 0.84); }
-.theme-neon_purple   { --accent: #c084fc; --accent2: #22d3ee; --pop: #facc15; --glass: rgba(14, 4, 30, 0.84); }
-.theme-emerald_tech  { --accent: #34d399; --accent2: #2dd4bf; --pop: #fde047; --glass: rgba(3, 18, 20, 0.84); }
-.theme-sunset_amber  { --accent: #fbbf24; --accent2: #f472b6; --pop: #38bdf8; --glass: rgba(24, 6, 22, 0.84); }
+.theme-cyber_blue     { --accent: #38bdf8; --accent2: #818cf8; --pop: #fde047; --glass: rgba(4, 10, 28, 0.84); }
+.theme-neon_purple    { --accent: #c084fc; --accent2: #22d3ee; --pop: #facc15; --glass: rgba(14, 4, 30, 0.84); }
+.theme-emerald_tech   { --accent: #34d399; --accent2: #2dd4bf; --pop: #fde047; --glass: rgba(3, 18, 20, 0.86); }
+.theme-sunset_amber   { --accent: #fbbf24; --accent2: #f472b6; --pop: #38bdf8; --glass: rgba(24, 6, 22, 0.84); }
+.theme-clean_light    { --accent: #2563eb; --accent2: #7c3aed; --pop: #f59e0b; --glass: rgba(255, 255, 255, 0.94); --glass-line: rgba(15, 23, 42, 0.14); }
+.theme-paper_cream    { --accent: #ea580c; --accent2: #0d9488; --pop: #eab308; --glass: rgba(255, 252, 245, 0.95); --glass-line: rgba(120, 53, 15, 0.18); }
+.theme-brutal_dark    { --accent: #facc15; --accent2: #fb7185; --pop: #22d3ee; --glass: #16161d; --glass-line: #facc15; }
+.theme-warm_editorial { --accent: #fb923c; --accent2: #f43f5e; --pop: #fde047; --glass: rgba(32, 14, 18, 0.86); --glass-line: rgba(251, 146, 60, 0.32); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: var(--W); height: var(--H); background: transparent; overflow: hidden;
@@ -142,3 +146,141 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
 /* Laser Pointer nối từ ngón tay Robot tới thẻ đang highlight */
 #laser-svg { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; pointer-events: none; }
 #robot { position: absolute; left: 0; top: 0; width: 140px; height: 160px; will-change: transform; }
+
+/* ====== MỞ RỘNG NỘI DUNG KHI TẮT ROBOT (CHỮ TO HƠN, KHÔNG LẶP KHUÔN) ====== */
+#root.no-mascot { --content-w: 820px; }
+#root.no-mascot .hl-line { font-size: 72px; max-width: 820px; }
+#root.no-mascot .metric-wrap, #root.no-mascot .cta-btn { max-width: 820px; }
+#root.no-mascot .title { font-size: 52px; }
+#root.no-mascot .text, #root.no-mascot .term-body { font-size: 40px; }
+#root.no-mascot #laser-svg, #root.no-mascot #robot { display: none !important; }
+
+/* ====== 3 KIỂU BỐ CỤC HOOK (THUMBNAIL MỖI VIDEO MỘT KIỂU) ====== */
+#root.hook-center_impact .seg[data-type="hook"] { align-items: center; text-align: center; }
+#root.hook-center_impact .hl-line { margin: 0 auto; font-size: 70px; }
+#root.hook-card_banner .seg[data-type="hook"] {
+  background: var(--glass); border: 3px solid var(--accent); border-radius: 38px;
+  padding: 56px 46px; height: auto; top: 560px; box-shadow: 0 22px 60px rgba(0,0,0,.45);
+}
+#root.hook-card_banner .hl-line { font-size: 64px; }
+
+/* ====== STYLE 1: EDITORIAL LIGHT (NỀN SÁNG APPLE/NOTION — TƯƠNG PHẢN CỰC CAO) ====== */
+#root.style-editorial_light { color: #0f172a; }
+#root.style-editorial_light #topbar { background: rgba(15, 23, 42, 0.12); height: 8px; }
+#root.style-editorial_light #prog { background: var(--accent); box-shadow: none; }
+#root.style-editorial_light #badge {
+  background: #0f172a; color: #ffffff; border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16); letter-spacing: 1.5px;
+}
+#root.style-editorial_light #seg-idx {
+  background: #ffffff; color: var(--accent); border: 2px solid rgba(15, 23, 42, 0.15);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+#root.style-editorial_light .title,
+#root.style-editorial_light .hl-line { color: #0f172a; text-shadow: none; }
+#root.style-editorial_light .hl-line.last span {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+#root.style-editorial_light .glass,
+#root.style-editorial_light .chk-item,
+#root.style-editorial_light .rank-item,
+#root.style-editorial_light .step,
+#root.style-editorial_light .bullet,
+#root.style-editorial_light .cmp-head div,
+#root.style-editorial_light .cmp-row div {
+  background: var(--glass); border: 2px solid var(--glass-line);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.09); color: #0f172a;
+}
+#root.style-editorial_light .ai-card { border-color: var(--accent); box-shadow: 0 12px 32px rgba(37, 99, 235, 0.16); }
+#root.style-editorial_light .term-box { background: #0f172a; border-color: #0f172a; box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22); }
+#root.style-editorial_light .term-tip { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
+#root.style-editorial_light .myth-card { background: #fff1f2; border-color: #f43f5e; color: #881337; box-shadow: 0 10px 26px rgba(244, 63, 94, 0.12); }
+#root.style-editorial_light .myth-card .label { color: #e11d48; }
+#root.style-editorial_light .fact-card { background: #ecfdf5; border-color: #10b981; color: #064e3b; box-shadow: 0 10px 26px rgba(16, 185, 129, 0.14); }
+#root.style-editorial_light .fact-card .label { color: #059669; }
+#root.style-editorial_light .cmp-head div:last-child { background: var(--accent); color: #ffffff; }
+#root.style-editorial_light .cmp-row.active div:last-child { background: #eff6ff; border-color: var(--accent); color: #0f172a; box-shadow: 0 10px 26px rgba(37, 99, 235, 0.18); }
+#root.style-editorial_light .rank-badge { background: #e2e8f0; color: #0f172a; }
+#root.style-editorial_light .rank-item.top1.active { background: #fefce8; border-color: #eab308; box-shadow: 0 12px 28px rgba(234, 179, 8, 0.25); }
+#root.style-editorial_light .chk-box { border-color: #94a3b8; }
+#root.style-editorial_light .step .num { background: var(--accent); color: #ffffff; }
+#root.style-editorial_light .cta-btn { background: #0f172a; color: #ffffff; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.25); }
+#root.style-editorial_light #sub {
+  background: rgba(255, 255, 255, 0.96); border: 2.5px solid #0f172a;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+}
+#root.style-editorial_light #sub .w.future { color: rgba(15, 23, 42, 0.45); }
+#root.style-editorial_light #sub .w.past { color: #0f172a; }
+#root.style-editorial_light #sub .w.active { background: var(--accent); color: #ffffff; box-shadow: none; }
+#root.style-editorial_light #watermark { color: rgba(15, 23, 42, 0.45); }
+
+/* ====== STYLE 2: NEO-BRUTALIST (TẠP CHÍ GÓC CẠNH, VIỀN DÀY, PHỤ ĐỀ NỔI KHÔNG HỘP) ====== */
+#root.style-neo_brutal #topbar { display: none; }
+#root.style-neo_brutal #badge {
+  border-radius: 6px; background: var(--accent); color: #0a0a0c;
+  border: 3px solid #ffffff; box-shadow: 6px 6px 0 #ffffff;
+}
+#root.style-neo_brutal #seg-idx {
+  border-radius: 6px; background: #0a0a0c; border: 3px solid var(--accent); color: var(--accent);
+}
+#root.style-neo_brutal .glass,
+#root.style-neo_brutal .term-box,
+#root.style-neo_brutal .myth-card,
+#root.style-neo_brutal .fact-card,
+#root.style-neo_brutal .chk-item,
+#root.style-neo_brutal .rank-item,
+#root.style-neo_brutal .step,
+#root.style-neo_brutal .bullet,
+#root.style-neo_brutal .cmp-head div,
+#root.style-neo_brutal .cmp-row div {
+  border-radius: 14px; border-width: 3px;
+  box-shadow: 8px 8px 0 var(--accent);
+}
+#root.style-neo_brutal .cta-btn { border-radius: 12px; border: 3px solid #ffffff; box-shadow: 8px 8px 0 #ffffff; }
+#root.style-neo_brutal #sub {
+  background: transparent; border: none; box-shadow: none; padding: 6px 4px;
+  font-size: 50px; text-shadow: 0 4px 0 #000, 0 0 18px rgba(0,0,0,0.95);
+}
+#root.style-neo_brutal #sub .w.active {
+  border-radius: 8px; background: var(--accent); color: #0a0a0c; text-shadow: none;
+  box-shadow: 4px 4px 0 #000;
+}
+
+/* ====== STYLE 3: TERMINAL PRO (VIỀN TRÁI DÀY, THANH TIẾN TRÌNH DƯỚI ĐÁY, PHONG CÁCH DEV) ====== */
+#root.style-terminal_pro #topbar { top: auto; bottom: 365px; height: 8px; }
+#root.style-terminal_pro #badge {
+  border-radius: 10px; background: rgba(6, 24, 18, 0.92); color: var(--accent);
+  border: 2px solid var(--accent); box-shadow: 0 0 22px rgba(52, 211, 153, 0.25);
+}
+#root.style-terminal_pro #badge::before { content: ">_ "; opacity: 0.85; }
+#root.style-terminal_pro .glass,
+#root.style-terminal_pro .chk-item,
+#root.style-terminal_pro .rank-item,
+#root.style-terminal_pro .step,
+#root.style-terminal_pro .bullet {
+  border-radius: 18px; border-left: 7px solid var(--accent);
+}
+#root.style-terminal_pro #sub {
+  border-radius: 16px; border: 2px solid var(--accent); background: rgba(3, 12, 10, 0.94);
+}
+
+/* ====== STYLE 4: CINEMA CLEAN (TỐI GIẢN CĂN GIỮA, PHỤ ĐỀ NỔI KIỂU CAPCUT) ====== */
+#root.style-cinema_clean #seg-idx { display: none; }
+#root.style-cinema_clean #topbar { top: 220px; height: 6px; opacity: 0.7; }
+#root.style-cinema_clean #badge {
+  left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.12);
+  color: var(--pop); border: 1.5px solid rgba(255,255,255,0.28); backdrop-filter: blur(8px);
+}
+#root.style-cinema_clean .title { text-align: center; }
+#root.style-cinema_clean .glass { border-radius: 28px; border-width: 1.5px; }
+#root.style-cinema_clean #sub {
+  background: transparent; border: none; box-shadow: none; padding: 8px 6px;
+  justify-content: center; width: 820px; font-size: 48px;
+  text-shadow: 0 4px 16px rgba(0,0,0,0.95), 0 2px 4px #000;
+}
+#root.style-cinema_clean #sub .w.active {
+  background: transparent; color: var(--pop); box-shadow: none;
+  transform: scale(1.16) translateY(-3px);
+  text-shadow: 0 4px 20px rgba(0,0,0,1), 0 0 16px var(--accent);
+}

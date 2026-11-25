@@ -90,6 +90,7 @@ function setExpr(e) { if (e !== curExpr) { document.getElementById('eyes').inner
 
 function build(seg, idx) {
   const el = $('<div class="seg"></div>');
+  el.dataset.type = seg.type;
   const d = seg.data, wp = [];
   const R = [];
   const add = (node, at) => { node.classList.add('reveal'); el.appendChild(node); R.push([node, at]); return node; };
@@ -182,7 +183,10 @@ function build(seg, idx) {
 
 function init(tl) {
   T = tl;
-  document.getElementById('root').className = 'theme-' + tl.bg_theme;
+  const vStyle = tl.visual_style || 'glass_neon';
+  const hLayout = tl.hook_layout || 'left_stack';
+  const noMascot = tl.mascot === false ? ' no-mascot' : '';
+  document.getElementById('root').className = `theme-${tl.bg_theme} style-${vStyle} hook-${hLayout}${noMascot}`;
   document.getElementById('badge').textContent = tl.badge || '';
   document.getElementById('badge').style.display = tl.badge ? 'block' : 'none';
   document.getElementById('robot').style.display = tl.mascot === false ? 'none' : 'block';

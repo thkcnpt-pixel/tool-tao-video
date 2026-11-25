@@ -20,7 +20,20 @@ MODELS = [
     "gemini-flash-lite-latest",
 ]
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-THEMES = ["cyber_blue", "neon_purple", "emerald_tech", "sunset_amber"]
+THEMES = [
+    "clean_light", "brutal_dark", "cyber_blue", "paper_cream",
+    "emerald_tech", "warm_editorial", "neon_purple", "sunset_amber",
+]
+THEME_VISUAL_PROFILE = {
+    "clean_light":    dict(visual_style="editorial_light", mascot=False, hook_layout="center_impact"),
+    "paper_cream":    dict(visual_style="editorial_light", mascot=False, hook_layout="card_banner"),
+    "brutal_dark":    dict(visual_style="neo_brutal",      mascot=False, hook_layout="card_banner"),
+    "emerald_tech":   dict(visual_style="terminal_pro",    mascot=False, hook_layout="left_stack"),
+    "warm_editorial": dict(visual_style="cinema_clean",    mascot=False, hook_layout="center_impact"),
+    "sunset_amber":   dict(visual_style="cinema_clean",    mascot=False, hook_layout="left_stack"),
+    "cyber_blue":     dict(visual_style="glass_neon",      mascot=True,  hook_layout="left_stack"),
+    "neon_purple":    dict(visual_style="glass_neon",      mascot=True,  hook_layout="card_banner"),
+}
 
 TIKTOK_SAFE_REPLACEMENTS = [
     ("mua ngay", "trải nghiệm ngay"),
@@ -126,13 +139,16 @@ def fetch_tech_headlines(limit=8):
 
 def build_prompt(topic, slot, recent, theme=None, top_hooks=()):
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
-    voice = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
+    chosen_theme = theme if theme in THEMES else THEMES[len(recent) % len(THEMES)]
+    prof = THEME_VISUAL_PROFILE[chosen_theme]
+    voice = ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural")[len(recent) % 2]
     cta_btn = SLOT_CTA_BUTTON.get(slot, "➕ Follow kênh nhận mẹo AI mỗi ngày")
     hooks_txt = "\n".join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"
-    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (22-30 giây).
+    scene_range = "2 đến 3" if (len(recent) % 2 == 0) else "3 đến 4"
+    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (18-30 giây).
 Chủ đề: {topic}
 {SLOT_HINT.get(slot, '')}
-{f'Dùng bg_theme = "{theme}".' if theme else 'Chọn bg_theme trong: ' + ', '.join(THEMES) + '.'}
+Dùng bg_theme = "{chosen_theme}".
 
 Các chủ đề đã làm gần đây (KHÔNG lặp lại góc nhìn/nội dung):
 {avoid}
@@ -147,7 +163,7 @@ Yêu cầu:
 - Mỗi cảnh CHỮ TRÊN MÀN HÌNH CỰC NGẮN (ưu tiên 3-6 từ/mục) để đọc được trên điện thoại; chi tiết đưa vào voiceover.
 - badge: đặt nhãn ngắn đa dạng theo chủ đề (VD: MẸO EXCEL, PROMPT HAY, TỰ ĐỘNG HÓA, SAI LẦM AI), KHÔNG dùng lặp "TIN CÔNG NGHỆ 2026".
 - hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[len(recent) % len(HOOK_ARCHETYPES)]}
-- scenes: chọn 3 đến 4 cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
+- scenes: chọn {scene_range} cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
 - checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 30 ký tự).
 - ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 30 ký tự).
 - prompt_card: prompt_text là 1 câu lệnh mẫu thực tế 10-18 từ; result_note tối đa 40 ký tự.
@@ -156,14 +172,14 @@ Yêu cầu:
 - stat_card & cta: metric / highlight_metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%).
 - cta.button_text: đặt đúng là "{cta_btn}".
 - pinned_question: 1 câu hỏi mở thú vị liên quan trực tiếp đến chủ đề để đăng làm bình luận ghim kích thích người xem tranh luận.
-- Mỗi voiceover 10-20 từ (tổng toàn video 50-100 từ).
+- Mỗi voiceover 10-20 từ (tổng toàn video 45-100 từ).
 - KỸ THUẬT CÂU GHÉP VÒNG LẶP (SPLIT-SENTENCE SEAMLESS LOOP — BẮT BUỘC):
   + Câu cuối của `cta.voiceover` và câu đầu của `hook.voiceover` PHẢI LÀ 2 NỬA CỦA CÙNG MỘT CÂU TIẾNG VIỆT!
   + Cụ thể: `cta.voiceover` kết thúc bằng một cụm dẫn mở KHÔNG CÓ DẤU CHẤM CUỐI (ví dụ: "...giúp bạn tiết kiệm 70% thời gian mỗi ngày, và lý do chính là vì"), còn `hook.voiceover` bắt đầu nối tiếp luôn vào cụm đó (ví dụ: "90% người dùng AI vẫn đang làm thủ công bước này mà chưa biết...").
   + TUYỆT ĐỐI KHÔNG ĐƯỢC copy nguyên câu của hook.voiceover sang cta.voiceover!
-- mascot=true, voice="{voice}", voice_rate="+12%".
+- mascot={str(prof["mascot"]).lower()}, voice="{voice}", voice_rate="+12%".
 
-Cấu trúc mẫu (chỉ chọn 3-4 cảnh trong scenes):
+Cấu trúc mẫu (chỉ chọn {scene_range} cảnh trong scenes):
 {json.dumps(SCHEMA_EXAMPLE, ensure_ascii=False, indent=1)}"""
 
 
@@ -219,8 +235,11 @@ def validate(s, slot=""):
     need(isinstance(s, dict), "không phải object")
     if s.get("bg_theme") not in THEMES:
         s["bg_theme"] = THEMES[0]
+    prof = THEME_VISUAL_PROFILE[s["bg_theme"]]
+    s["visual_style"] = prof["visual_style"]
+    s["hook_layout"] = prof["hook_layout"]
+    s["mascot"] = prof["mascot"]
     s.setdefault("badge", "THIỆN AI THỰC CHIẾN")
-    s["mascot"] = bool(s.get("mascot", True))
     if s.get("voice") not in ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"):
         s["voice"] = SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural")
     s.setdefault("voice_rate", "+12%")
@@ -418,18 +437,18 @@ Ca phát sóng: {slot} — {SLOT_HINT.get(slot, '')}{news_block}
 Các chủ đề đã làm gần đây (TUYỆT ĐỐI KHÔNG TRÙNG LẶP):
 {avoid}
 
-Hãy đề xuất 1 chủ đề video ngắn (30-40 giây) mới mẻ, thực tế.
-Trả về JSON: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber"}}"""
+Hãy đề xuất 1 chủ đề video ngắn (20-30 giây) mới mẻ, thực tế.
+Trả về JSON: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "{'|'.join(THEMES)}"}}"""
+    rotated_theme = THEMES[len(recent) % len(THEMES)]
     for model in MODELS[:5]:
         try:
             res, _ = _call_with_rotation(model, prompt, keys)
             topic = str(res.get("topic", "")).strip()
-            theme = res.get("bg_theme") if res.get("bg_theme") in THEMES else THEMES[0]
             if topic:
-                return topic, theme
+                return topic, rotated_theme
         except Exception:
             time.sleep(2)
-    return f"3 mẹo ứng dụng AI tăng tốc công việc ca {slot}", THEMES[0]
+    return f"3 mẹo ứng dụng AI tăng tốc công việc ca {slot}", rotated_theme
 
 
 def generate_batch_topics(recent=(), days=3, api_key=None):
@@ -444,7 +463,7 @@ Hãy lập kế hoạch {count} chủ đề video ngắn (chia đều theo thứ
 Các chủ đề đã làm (KHÔNG TRÙNG LẶP):
 {avoid}
 
-Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic": "..."}}, ...]}}"""
+Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "clean_light", "topic": "..."}}, ...]}}"""
     for model in MODELS[:5]:
         try:
             res, _ = _call_with_rotation(model, prompt, keys)
@@ -452,7 +471,7 @@ Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "cyber_blue", "topic"
             out = []
             for idx, it in enumerate(items[:count]):
                 sl = it.get("slot") if it.get("slot") in ("SANG", "TRUA", "TOI") else ("SANG", "TRUA", "TOI")[idx % 3]
-                th = it.get("bg_theme") if it.get("bg_theme") in THEMES else THEMES[idx % 4]
+                th = THEMES[(len(recent) + idx) % len(THEMES)]
                 tp = str(it.get("topic", "")).strip()
                 if tp:
                     out.append((sl, th, tp))
@@ -480,13 +499,14 @@ Các chủ đề đã có trong kho (TUYỆT ĐỐI KHÔNG TRÙNG Ý TƯỞNG):
 {avoid}
 
 Trả về JSON đúng định dạng:
-{{"items": [{{"bg_theme": "cyber_blue|neon_purple|emerald_tech|sunset_amber", "topic": "Tên chủ đề súc tích 10-18 từ"}}, ...]}}"""
+{{"items": [{{"bg_theme": "{'|'.join(THEMES)}", "topic": "Tên chủ đề súc tích 10-18 từ"}}, ...]}}"""
+    offset = 0 if slot == "TRUA" else 3
     for model in MODELS[:5]:
         try:
             res, _ = _call_with_rotation(model, prompt, keys)
             out = []
             for idx, it in enumerate(res.get("items", [])[:count]):
-                th = it.get("bg_theme") if it.get("bg_theme") in THEMES else THEMES[idx % 4]
+                th = THEMES[(len(recent) + offset + idx) % len(THEMES)]
                 tp = str(it.get("topic", "")).strip()
                 if tp:
                     out.append((sl := slot, th, tp))
@@ -496,4 +516,4 @@ Trả về JSON đúng định dạng:
         except Exception as ex:
             print(f"[gemini] generate_evergreen_topics ({model}) lỗi: {str(ex)[:100]}")
             time.sleep(2)
-    return [(slot, THEMES[0], f"Bí quyết ứng dụng AI tối ưu hiệu suất làm việc ca {slot}")]
+    return [(slot, THEMES[(len(recent) + offset) % len(THEMES)], f"Bí quyết ứng dụng AI tối ưu hiệu suất làm việc ca {slot}")]

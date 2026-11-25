@@ -22,6 +22,22 @@ THEME_MUSIC_MAP = {
     "neon_purple": "future_bass.mp3",
     "emerald_tech": "cyber_chill.mp3",
     "sunset_amber": "lofi_focus.mp3",
+    "clean_light": "cyber_chill.mp3",
+    "paper_cream": "lofi_focus.mp3",
+    "brutal_dark": "future_bass.mp3",
+    "warm_editorial": "lofi_focus.mp3",
+}
+
+# Hồ sơ hình ảnh theo từng theme để mỗi video có bố cục, phụ đề, nền & mascot khác hẳn nhau
+THEME_VISUAL_PROFILE = {
+    "clean_light":    dict(visual_style="editorial_light", mascot=False, hook_layout="center_impact"),
+    "paper_cream":    dict(visual_style="editorial_light", mascot=False, hook_layout="card_banner"),
+    "brutal_dark":    dict(visual_style="neo_brutal",      mascot=False, hook_layout="card_banner"),
+    "emerald_tech":   dict(visual_style="terminal_pro",    mascot=False, hook_layout="left_stack"),
+    "warm_editorial": dict(visual_style="cinema_clean",    mascot=False, hook_layout="center_impact"),
+    "sunset_amber":   dict(visual_style="cinema_clean",    mascot=False, hook_layout="left_stack"),
+    "cyber_blue":     dict(visual_style="glass_neon",      mascot=True,  hook_layout="left_stack"),
+    "neon_purple":    dict(visual_style="glass_neon",      mascot=True,  hook_layout="card_banner"),
 }
 
 
@@ -73,8 +89,19 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
             audios.append(a)
             durs.append(d + pad)
             print(f"[tts] {s['type']:<14} {d:5.1f}s (rate={seg_rate})  {len(chunks)} cụm phụ đề")
-        timeline = dict(badge=script.get("badge", ""), bg_theme=theme, mascot=script.get("mascot", True),
-                        segments=segs, total=t)
+        prof = THEME_VISUAL_PROFILE.get(theme, THEME_VISUAL_PROFILE["cyber_blue"])
+        visual_style = script.get("visual_style") or prof["visual_style"]
+        hook_layout = script.get("hook_layout") or prof["hook_layout"]
+        mascot = script["mascot"] if "mascot" in script else prof["mascot"]
+        timeline = dict(
+            badge=script.get("badge", ""),
+            bg_theme=theme,
+            visual_style=visual_style,
+            hook_layout=hook_layout,
+            mascot=mascot,
+            segments=segs,
+            total=t,
+        )
         vt = video_composer.build_voice_track(audios, durs, tmp)
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         save = (frames_dir, set(frame_ids)) if frames_dir else None
