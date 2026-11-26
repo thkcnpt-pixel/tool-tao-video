@@ -160,13 +160,14 @@ def fetch_tech_headlines(limit=8):
 
 def build_prompt(topic, slot, recent, theme=None, top_hooks=()):
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
-    chosen_theme = theme if theme in THEMES else THEMES[len(recent) % len(THEMES)]
+    seed_idx = sum(ord(c) for c in f"{topic}|{recent[-1] if recent else ''}")
+    chosen_theme = theme if theme in THEMES else THEMES[seed_idx % len(THEMES)]
     prof = THEME_VISUAL_PROFILE[chosen_theme]
-    voice = ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural")[len(recent) % 2]
+    voice = ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural")[seed_idx % 2]
     cta_btn = SLOT_CTA_BUTTON.get(slot, "📋 Copy trọn bộ Prompt dưới Bình luận")
-    series_badge = _suggest_series_badge(topic, len(recent) + 1)
+    series_badge = _suggest_series_badge(topic, (seed_idx % 18) + 1)
     hooks_txt = "\n".join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"
-    scene_range = "2 đến 3" if (len(recent) % 2 == 0) else "3 đến 4"
+    scene_range = "2 đến 3" if (seed_idx % 2 == 0) else "3 đến 4"
     return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (18-28 giây).
 Chủ đề: {topic}
 {SLOT_HINT.get(slot, '')}
@@ -185,7 +186,7 @@ Yêu cầu:
 - youtube_title: tiêu đề tối ưu CTR & tìm kiếm tiếng Việt (35-58 ký tự), có con số hoặc kết quả cụ thể gây tò mò, KHÔNG chứa dấu # hay hashtag.
 - HOOK 2 GIÂY ĐẦU: hook.voiceover tối đa 12 từ, đánh thẳng vào kết quả/nỗi đau cụ thể (con số, thời gian), không chào hỏi.
 - Mỗi cảnh CHỮ TRÊN MÀN HÌNH CỰC NGẮN (ưu tiên 3-6 từ/mục) để đọc được ngay trên điện thoại; chi tiết đưa vào voiceover.
-- hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[len(recent) % len(HOOK_ARCHETYPES)]}
+- hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[seed_idx % len(HOOK_ARCHETYPES)]}
 - scenes: chọn {scene_range} cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
 - checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 30 ký tự).
 - ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 30 ký tự).

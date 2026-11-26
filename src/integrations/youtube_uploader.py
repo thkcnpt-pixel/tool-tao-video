@@ -91,10 +91,11 @@ def _split_caption(caption, topic, youtube_title="", full_prompt=""):
     return title[:100], desc.strip()
 
 
-def post_top_comment(yt, video_id, comment_text):
-    """Tự động đăng 1 bình luận đầu tiên dưới video YouTube Shorts để giữ chân người xem đọc & copy Prompt."""
+def post_top_comment(video_id, comment_text):
+    """Tự động đăng 1 bình luận đầu tiên dưới video YouTube Shorts (tách riêng scope force-ssl để không ảnh hưởng upload)."""
     try:
-        yt.commentThreads().insert(
+        yt_cmt = get_youtube_service(["https://www.googleapis.com/auth/youtube.force-ssl"])
+        yt_cmt.commentThreads().insert(
             part="snippet",
             body={
                 "snippet": {
@@ -106,7 +107,7 @@ def post_top_comment(yt, video_id, comment_text):
         print(f"[youtube] đã tự động đăng bình luận Prompt mẫu trên video {video_id}")
         return True
     except Exception as ex:
-        print(f"[youtube] bỏ qua đăng bình luận ({ex!r})")
+        print(f"[youtube] bỏ qua đăng bình luận (token chỉ cấp quyền upload, Prompt đã gắn ở đầu Mô tả: {ex!r})")
         return False
 
 
@@ -123,12 +124,10 @@ def fetch_video_metrics(video_ids):
             v = int(st.get("viewCount", 0))
             lk = int(st.get("likeCount", 0))
             cm = int(st.get("commentCount", 0))
-            # Trọng số tương tác: 1 Like ~ 35 views, 1 Comment ~ 80 views -> ưu tiên bài giữ chân & kích thích hành động thật
             score = v + lk * 35 + cm * 80
             out[it["id"]] = {"views": v, "likes": lk, "comments": cm, "score": score}
         return out
-    except Exception as ex:
-        print(f"[youtube] bỏ qua đọc analytics ({ex!r})")
+    except Exception:
         return {}
 
 
@@ -140,10 +139,10 @@ def fetch_video_views(video_ids):
 
 def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinned_question="", youtube_title="", full_prompt=""):
     """Upload video lên YouTube Shorts:
-    - Dùng tiêu đề SEO sạch (không nhồi hashtag) tăng tỷ lệ bấm xem.
-    - Ghim trọn bộ Prompt mẫu đầy đủ vào Bình luận đầu tiên + Mô tả để kéo người xem mở khung bình luận (tăng APV > 110%).
+    - Dùng đúng scope youtube.upload để tương thích 100% với Refresh Token hiện tại.
+    - Gắn trọn bộ Prompt mẫu đầy đủ ngay đầu Mô tả + thử ghim Bình luận đầu tiên.
     """
-    yt = get_youtube_service(YT_SCOPES)
+    yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.upload"])
     title, desc = _split_caption(caption, topic, youtube_title=youtube_title, full_prompt=full_prompt)
     publish_at = next_golden_publish_at(slot) if auto_public else None
     if not auto_public:
@@ -191,6 +190,6 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinne
     else:
         comment = f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
     if not publish_at and privacy == "public":
-        post_top_comment(yt, vid, comment)
+        post_top_comment(vid, comment)
 
     return f"https://youtube.com/shorts/{vid}", mode_note
