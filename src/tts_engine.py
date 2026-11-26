@@ -1,15 +1,27 @@
-"""Edge-TTS (retry 4 lần + dự phòng gTTS) + Seamless Loop Audio Trim:
-- Cảnh Hook (trim_head=True): cắt bỏ ~0.15s khoảng lặng đầu file của edge-tts và dịch khớp mốc thời gian phụ đề.
-- Cảnh CTA (is_loop_tail=True): giữ ngữ điệu lửng giữa câu (không thêm dấu chấm cuối) và cắt sát đuôi (0.02s) để nối thẳng vào từ đầu tiên của cảnh Hook khi video phát lặp lại!
+"""TTS Engine thế hệ mới:
+1. Ưu tiên Gemini 2.5 Native Audio TTS (giọng người thật tự nhiên, giàu cảm xúc: Kore / Puck / Aoede / Fenrir) xoay vòng qua 3 API Key.
+2. Đảm bảo đồng nhất 100% giọng đọc xuyên suốt 1 video (không bao giờ trộn 2 giọng giữa chừng): nếu Gemini TTS chạm giới hạn quota ở bất kỳ đoạn nào, tự động chuyển mượt toàn bộ video đó sang Edge-TTS Neural (dự phòng tầng 3: gTTS).
+3. Cắt sát đầu Hook (trim_head=True) và đuôi CTA (is_loop_tail=True) bằng FFmpeg silencedetect + cân trọng số dấu câu cho phụ đề Karaoke khớp từng nhịp đọc.
 """
 import asyncio
+import base64
+import hashlib
+import os
 import re
 import subprocess
 import time
 from pathlib import Path
 
+import requests
+
 DEFAULT_VOICE = "vi-VN-HoaiMyNeural"
 DEFAULT_RATE = "+12%"
+
+GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+GEMINI_TTS_ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent"
+GEMINI_FEMALE_VOICES = ("Kore", "Aoede")
+GEMINI_MALE_VOICES = ("Puck", "Fenrir")
+_GEMINI_TTS_DEAD_KEYS = set()
 
 STOPWORDS = {
     "và", "của", "cho", "với", "những", "các", "một", "được", "trong", "khi", "này", "đó",
@@ -19,8 +31,10 @@ STOPWORDS = {
 
 
 def probe_duration(path):
-    out = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                   "-of", "default=nw=1:nk=1", str(path)])
+    out = subprocess.check_output([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1", str(path),
+    ])
     return float(out.strip())
 
 
@@ -34,6 +48,127 @@ def _clean_voice_text(text, is_loop_tail=False):
         return t
     joined = ", ".join(parts)
     return joined if is_loop_tail else (joined + ".")
+
+
+def _get_gemini_keys():
+    keys = []
+    for name in ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"):
+        val = os.environ.get(name, "").strip()
+        if val and val not in keys and val not in _GEMINI_TTS_DEAD_KEYS:
+            keys.append(val)
+    return keys
+
+
+def _pick_gemini_voice(voice_hint, seed_text=""):
+    digest = hashlib.md5(seed_text.encode("utf-8")).digest()[0] if seed_text else 0
+    if "NamMinh" in str(voice_hint) or str(voice_hint) in GEMINI_MALE_VOICES:
+        return voice_hint if voice_hint in GEMINI_MALE_VOICES else GEMINI_MALE_VOICES[digest % len(GEMINI_MALE_VOICES)]
+    return voice_hint if voice_hint in GEMINI_FEMALE_VOICES else GEMINI_FEMALE_VOICES[digest % len(GEMINI_FEMALE_VOICES)]
+
+
+def _rate_to_tempo(rate_str, for_gemini=True):
+    m = re.search(r"([+-]?\d+)", str(rate_str or ""))
+    pct = int(m.group(1)) if m else 12
+    # Gemini TTS đã có tốc độ tự nhiên nhanh gọn sẵn nên chỉ tăng nhẹ ~55% mức pct của Edge-TTS
+    scale = 0.55 if for_gemini else 1.0
+    return max(0.95, min(1.25, 1.0 + (pct * scale) / 100.0))
+
+
+def _detect_speech_bounds(audio_path, raw_dur):
+    """Dùng silencedetect tìm điểm bắt đầu nói và kết thúc nói chính xác tới mili-giây."""
+    proc = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(audio_path),
+         "-af", "silencedetect=noise=-38dB:d=0.035", "-f", "null", "-"],
+        capture_output=True, text=True,
+    )
+    log = proc.stderr or ""
+    starts = [float(x) for x in re.findall(r"silence_start:\s*([0-9.]+)", log)]
+    ends = [float(x) for x in re.findall(r"silence_end:\s*([0-9.]+)", log)]
+
+    first_word_start = 0.0
+    if starts and ends and starts[0] < 0.05 and ends[0] < raw_dur * 0.5:
+        first_word_start = ends[0]
+
+    last_word_end = raw_dur
+    if starts and starts[-1] > raw_dur * 0.55:
+        if not ends or ends[-1] < starts[-1] or abs(ends[-1] - raw_dur) < 0.06:
+            last_word_end = starts[-1]
+    return first_word_start, last_word_end
+
+
+def _gemini_tts_once(text, gemini_voice, rate, out_path, is_loop_tail=False):
+    keys = _get_gemini_keys()
+    if not keys:
+        raise RuntimeError("Không còn GEMINI_API_KEY khả dụng cho Gemini TTS")
+
+    clean = _clean_voice_text(text, is_loop_tail=is_loop_tail)
+    body = {
+        "contents": [{"parts": [{"text": clean}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {"voiceName": gemini_voice}
+                }
+            },
+        },
+    }
+
+    last_err = None
+    audio_raw, mime = None, ""
+    for k in keys:
+        try:
+            r = requests.post(
+                GEMINI_TTS_ENDPOINT,
+                headers={"x-goog-api-key": k, "Content-Type": "application/json"},
+                json=body,
+                timeout=35,
+            )
+            if r.status_code != 200:
+                msg = f"HTTP {r.status_code}: {r.text[:160]}"
+                if r.status_code in (403, 429) or "RESOURCE_EXHAUSTED" in r.text or "quota" in r.text.lower():
+                    _GEMINI_TTS_DEAD_KEYS.add(k)
+                raise RuntimeError(msg)
+            data = r.json()
+            part = data["candidates"][0]["content"]["parts"][0]
+            inline = part.get("inlineData") or part.get("inline_data") or {}
+            b64 = inline.get("data", "")
+            mime = inline.get("mimeType") or inline.get("mime_type") or "audio/L16;rate=24000"
+            if not b64:
+                raise RuntimeError("Gemini TTS trả về rỗng")
+            audio_raw = base64.b64decode(b64)
+            if len(audio_raw) < 1000:
+                raise RuntimeError(f"Gemini TTS audio quá ngắn ({len(audio_raw)}B)")
+            break
+        except Exception as ex:
+            last_err = ex
+            continue
+
+    if audio_raw is None:
+        raise RuntimeError(f"Gemini TTS lỗi trên mọi key: {last_err!r}")
+
+    raw_tmp = Path(str(out_path) + ".gemraw")
+    raw_tmp.write_bytes(audio_raw)
+    tempo = _rate_to_tempo(rate, for_gemini=True)
+    try:
+        mime_low = mime.lower()
+        cmd = ["ffmpeg", "-y", "-loglevel", "error"]
+        if "l16" in mime_low or "pcm" in mime_low:
+            m_rate = re.search(r"rate=(\d+)", mime_low)
+            sr = int(m_rate.group(1)) if m_rate else 24000
+            cmd += ["-f", "s16le", "-ar", str(sr), "-ac", "1", "-i", str(raw_tmp)]
+        else:
+            cmd += ["-i", str(raw_tmp)]
+        cmd += ["-af", f"atempo={tempo:.3f}", "-c:a", "libmp3lame", "-b:a", "128k", str(out_path)]
+        subprocess.run(cmd, check=True)
+    finally:
+        raw_tmp.unlink(missing_ok=True)
+
+    raw_dur = probe_duration(out_path)
+    first_s, last_e = _detect_speech_bounds(out_path, raw_dur)
+    duration, _ = _trim_and_boost(out_path, first_s, last_e, trim_head=True, is_loop_tail=is_loop_tail)
+    timed = _spread(text.split(), 0.0, max(0.35, duration - (0.02 if is_loop_tail else 0.08)))
+    return duration, make_chunks(timed, duration)
 
 
 async def _synth_once(text, voice, rate, out, is_loop_tail=False):
@@ -58,14 +193,12 @@ async def _synth_once(text, voice, rate, out, is_loop_tail=False):
 
 
 def _trim_and_boost(path, first_word_start, last_word_end, trim_head=False, is_loop_tail=False):
-    """Cắt bỏ khoảng im lặng đầu (cho Hook) & cuối (cắt sát 0.02s cho CTA), chuẩn hóa âm lượng rõ to.
-    Trả về (duration_mới, head_offset_đã_cắt).
-    """
+    """Cắt bỏ khoảng im lặng đầu (cho Hook) & cuối (cắt sát 0.02s cho CTA), chuẩn hóa âm lượng rõ to."""
     raw_dur = probe_duration(path)
     head_cut = max(0.0, first_word_start - 0.02) if (trim_head and first_word_start > 0.03) else 0.0
     tail_pad = 0.02 if is_loop_tail else 0.12
-    end_pos = min(raw_dur, max(head_cut + 0.6, last_word_end + tail_pad)) if last_word_end > 0 else raw_dur
-    clip_dur = max(0.5, end_pos - head_cut)
+    end_pos = min(raw_dur, max(head_cut + 0.55, last_word_end + tail_pad)) if last_word_end > 0 else raw_dur
+    clip_dur = max(0.45, end_pos - head_cut)
 
     tmp = Path(str(path) + ".trim.mp3")
     af = "highpass=f=80,acompressor=threshold=-20dB:ratio=3:attack=5:release=50:makeup=4dB,volume=5dB,alimiter=limit=0.95"
@@ -85,7 +218,7 @@ def _gtts_fallback(text, out_path, is_loop_tail=False):
     tmp = Path(str(out_path) + ".gtts.mp3")
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-i", str(out_path),
-        "-af", "atempo=1.25,silenceremove=start_periods=1:start_duration=0.02:start_threshold=-42dB:"
+        "-af", "atempo=1.22,silenceremove=start_periods=1:start_duration=0.02:start_threshold=-42dB:"
                "stop_periods=-1:stop_duration=0.04:stop_threshold=-42dB,"
                "highpass=f=80,acompressor=threshold=-20dB:ratio=3:attack=5:release=50:makeup=4dB,volume=5dB,alimiter=limit=0.95",
         "-c:a", "libmp3lame", "-b:a", "128k", str(tmp),
@@ -94,11 +227,24 @@ def _gtts_fallback(text, out_path, is_loop_tail=False):
     return probe_duration(out_path)
 
 
+def _word_weight(w):
+    clean = re.sub(r"\W+", "", w)
+    base = max(2, len(clean)) + 1.2
+    if w.endswith((",", ";", ":", "—", "-")):
+        base += 2.6  # Nghỉ nhịp tự nhiên sau dấu phẩy
+    elif w.endswith((".", "?", "!", "…")):
+        base += 3.5
+    return base
+
+
 def _spread(words, start, end):
-    total = sum(len(w) + 1 for w in words) or 1
+    if not words:
+        return []
+    weights = [_word_weight(w) for w in words]
+    total = sum(weights) or 1.0
     t, res = start, []
-    for w in words:
-        d = (end - start) * (len(w) + 1) / total
+    for w, wt in zip(words, weights):
+        d = (end - start) * wt / total
         res.append((w, t, t + d))
         t += d
     return res
@@ -167,12 +313,11 @@ def make_chunks(timed, duration, per=5):
     return chunks
 
 
-def synthesize(text, out_path, voice=DEFAULT_VOICE, rate=DEFAULT_RATE, trim_head=False, is_loop_tail=False):
-    """Tạo mp3 giọng đọc + phụ đề Karaoke từng từ (hỗ trợ cắt sát đầu Hook và đuôi CTA cho Seamless Loop)."""
+def _synthesize_edge_or_gtts(text, out_path, voice=DEFAULT_VOICE, rate=DEFAULT_RATE, trim_head=False, is_loop_tail=False):
     out_path = Path(out_path)
-    events = []
-    alt_voice = "vi-VN-NamMinhNeural" if voice == "vi-VN-HoaiMyNeural" else "vi-VN-HoaiMyNeural"
-    attempts = [(voice, rate), (voice, rate), (voice, "+10%"), (alt_voice, rate)]
+    edge_voice = voice if str(voice).startswith("vi-VN-") else DEFAULT_VOICE
+    alt_voice = "vi-VN-NamMinhNeural" if edge_voice == "vi-VN-HoaiMyNeural" else "vi-VN-HoaiMyNeural"
+    attempts = [(edge_voice, rate), (edge_voice, rate), (edge_voice, "+10%"), (alt_voice, rate)]
 
     last_err = None
     for idx, (v, r) in enumerate(attempts):
@@ -196,3 +341,49 @@ def synthesize(text, out_path, voice=DEFAULT_VOICE, rate=DEFAULT_RATE, trim_head
     duration = _gtts_fallback(text, out_path, is_loop_tail=is_loop_tail)
     timed = words_timing(text, duration, [])
     return duration, make_chunks(timed, duration)
+
+
+def synthesize(text, out_path, voice=DEFAULT_VOICE, rate=DEFAULT_RATE, trim_head=False, is_loop_tail=False, allow_gemini=False):
+    """Tạo mp3 cho 1 đoạn lẻ. Mặc định dùng synthesize_segments() cho toàn video để đồng nhất 100% giọng."""
+    if allow_gemini and _get_gemini_keys():
+        try:
+            g_voice = _pick_gemini_voice(voice, text)
+            return _gemini_tts_once(text, g_voice, rate, Path(out_path), is_loop_tail=is_loop_tail)
+        except Exception as ex:
+            print(f"[tts] Gemini TTS fallback sang Edge-TTS ({ex!r})")
+    return _synthesize_edge_or_gtts(text, out_path, voice=voice, rate=rate, trim_head=trim_head, is_loop_tail=is_loop_tail)
+
+
+def synthesize_segments(segs, workdir, voice, rate_fn):
+    """Tổng hợp giọng đọc cho toàn bộ các phân đoạn của video, cam kết 100% đồng nhất 1 giọng duy nhất:
+    - Ưu tiên thử Gemini 2.5 Native Audio TTS (giọng người thật tự nhiên) cho cả video.
+    - Nếu bất kỳ phân đoạn nào bị hết quota Gemini TTS -> tự động chuyển mượt toàn bộ video sang Edge-TTS Neural.
+    """
+    workdir = Path(workdir)
+    seed_txt = segs[0]["voiceover"] if segs else ""
+    if _get_gemini_keys() and os.environ.get("DISABLE_GEMINI_TTS", "") != "1":
+        g_voice = _pick_gemini_voice(voice, seed_txt)
+        gem_results = []
+        try:
+            for i, s in enumerate(segs):
+                a = workdir / f"tts_{i}.mp3"
+                seg_rate = rate_fn(s["type"])
+                d, chunks = _gemini_tts_once(
+                    s["voiceover"], g_voice, seg_rate, a, is_loop_tail=(i == len(segs) - 1)
+                )
+                gem_results.append((a, d, chunks, seg_rate, f"gemini:{g_voice}"))
+            print(f"[tts] Đã tổng hợp trọn bộ {len(segs)} cảnh bằng giọng người thật Gemini TTS ({g_voice})")
+            return gem_results
+        except Exception as ex:
+            print(f"[tts] Gemini TTS chạm giới hạn ({str(ex)[:110]}) -> đồng bộ 100% video sang Edge-TTS ({voice})")
+
+    edge_results = []
+    for i, s in enumerate(segs):
+        a = workdir / f"tts_{i}.mp3"
+        seg_rate = rate_fn(s["type"])
+        d, chunks = _synthesize_edge_or_gtts(
+            s["voiceover"], a, voice=voice, rate=seg_rate,
+            trim_head=(i == 0), is_loop_tail=(i == len(segs) - 1),
+        )
+        edge_results.append((a, d, chunks, seg_rate, voice))
+    return edge_results

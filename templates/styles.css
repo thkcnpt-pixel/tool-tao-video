@@ -284,3 +284,57 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
   transform: scale(1.16) translateY(-3px);
   text-shadow: 0 4px 20px rgba(0,0,0,1), 0 0 16px var(--accent);
 }
+
+/* ====== STAGE CAMERA PUNCH-IN & PATTERN INTERRUPT FLASH ====== */
+#stage {
+  position: absolute; left: 0; top: 0; width: 1080px; height: 1920px;
+  transform-origin: 450px 820px; will-change: transform;
+}
+#flash {
+  position: absolute; left: 0; top: 0; width: 1080px; height: 1920px;
+  background: radial-gradient(circle at 50% 44%, rgba(255,255,255,0.45), transparent 68%);
+  opacity: 0; pointer-events: none;
+}
+
+/* ====== MOCKUP GIAO DIỆN ỨNG DỤNG THỰC TẾ TRÊN HOOK (CHỐNG CẢM GIÁC SLIDE CHỮ) ====== */
+.app-mock {
+  display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 740px;
+  padding: 20px 24px; border-radius: 26px; margin-bottom: 14px;
+  background: rgba(10, 16, 34, 0.90); border: 2px solid var(--accent);
+  box-shadow: 0 16px 42px rgba(0,0,0,0.45);
+}
+.app-mock-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.app-pill {
+  display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px; border-radius: 999px;
+  font-size: 24px; font-weight: 800; color: #fff;
+}
+.app-pill.excel  { background: #15803d; }
+.app-pill.pdf    { background: #dc2626; }
+.app-pill.mail   { background: #2563eb; }
+.app-pill.code   { background: #4f46e5; }
+.app-pill.ai     { background: linear-gradient(90deg, #2563eb, #7c3aed); }
+.app-status {
+  font-size: 22px; font-weight: 700; color: #34d399;
+  padding: 6px 14px; border-radius: 999px; background: rgba(16, 185, 129, 0.16);
+}
+.app-mock-body {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 14px 18px; border-radius: 16px; background: rgba(255,255,255,0.07);
+  font-size: 26px; font-weight: 700; color: #f8fafc;
+}
+.app-mock-body .bad-tag {
+  padding: 6px 14px; border-radius: 10px; background: rgba(244, 63, 94, 0.22);
+  color: #fda4af; text-decoration: line-through; font-weight: 700;
+}
+.app-mock-body .good-tag {
+  padding: 6px 16px; border-radius: 10px; background: rgba(52, 211, 153, 0.24);
+  color: #6ee7b7; font-weight: 800;
+}
+#root.style-editorial_light .app-mock {
+  background: #ffffff; border: 2.5px solid #0f172a; box-shadow: 0 14px 34px rgba(15,23,42,0.12);
+}
+#root.style-editorial_light .app-mock-body { background: #f1f5f9; color: #0f172a; }
+#root.style-editorial_light .app-mock-body .bad-tag { background: #ffe4e6; color: #be123c; }
+#root.style-editorial_light .app-mock-body .good-tag { background: #d1fae5; color: #047857; }
+#root.style-editorial_light .app-status { color: #047857; background: #d1fae5; }
+#root.style-neo_brutal .app-mock { border-radius: 12px; border-width: 3px; box-shadow: 7px 7px 0 var(--accent); }

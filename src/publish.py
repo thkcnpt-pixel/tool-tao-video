@@ -69,9 +69,12 @@ def main():
         pass
     print(f"[publish] đã khóa dòng {r} (status=DANG_DANG): id={row['id']} drive_id={drive_id}")
 
-    pinned_q = ""
+    pinned_q, yt_title, full_pr = "", "", ""
     try:
-        pinned_q = json.loads(row.get("script_json") or "{}").get("pinned_question", "")
+        sc_obj = json.loads(row.get("script_json") or "{}")
+        pinned_q = sc_obj.get("pinned_question", "")
+        yt_title = sc_obj.get("youtube_title", "")
+        full_pr = sc_obj.get("full_prompt", "")
     except Exception:
         pass
 
@@ -86,7 +89,8 @@ def main():
             try:
                 yt_res = youtube_uploader.upload_short(
                     mp4, row["caption"], row["topic"],
-                    slot=row.get("slot", ""), auto_public=True, pinned_question=pinned_q,
+                    slot=row.get("slot", ""), auto_public=True,
+                    pinned_question=pinned_q, youtube_title=yt_title, full_prompt=full_pr,
                 )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] upload OK ({yt_mode}): {yt_url}")

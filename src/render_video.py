@@ -76,10 +76,9 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
     segs = build_segments(script)
     with tempfile.TemporaryDirectory() as tmp:
         t, audios, durs, cid = 0.0, [], [], 0
-        for i, s in enumerate(segs):
-            a = Path(tmp) / f"tts_{i}.mp3"
-            seg_rate = dynamic_rate_for_segment(s["type"], base_rate)
-            d, chunks = tts_engine.synthesize(s["voiceover"], a, voice, seg_rate, trim_head=(i == 0), is_loop_tail=(i == len(segs) - 1))
+        rate_fn = lambda st: dynamic_rate_for_segment(st, base_rate)
+        synth_list = tts_engine.synthesize_segments(segs, tmp, voice, rate_fn)
+        for i, (s, (a, d, chunks, seg_rate, v_tag)) in enumerate(zip(segs, synth_list)):
             for c in chunks:
                 c["id"] = cid
                 cid += 1
@@ -88,13 +87,14 @@ def render(script, out_path, music=None, frames_dir=None, frame_ids=()):
             t += d + pad
             audios.append(a)
             durs.append(d + pad)
-            print(f"[tts] {s['type']:<14} {d:5.1f}s (rate={seg_rate})  {len(chunks)} cụm phụ đề")
+            print(f"[tts] {s['type']:<14} {d:5.1f}s ({v_tag}, rate={seg_rate})  {len(chunks)} cụm phụ đề")
         prof = THEME_VISUAL_PROFILE.get(theme, THEME_VISUAL_PROFILE["cyber_blue"])
         visual_style = script.get("visual_style") or prof["visual_style"]
         hook_layout = script.get("hook_layout") or prof["hook_layout"]
         mascot = script["mascot"] if "mascot" in script else prof["mascot"]
         timeline = dict(
             badge=script.get("badge", ""),
+            topic=script.get("youtube_title") or script.get("caption", ""),
             bg_theme=theme,
             visual_style=visual_style,
             hook_layout=hook_layout,

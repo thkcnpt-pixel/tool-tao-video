@@ -77,8 +77,8 @@ def upload_reel(video_path, caption, topic=""):
     desc = (
         f"{caption}\n\n"
         f"🤖 Thiện AI Thực Chiến — Mẹo AI & Tự động hóa 30s\n"
-        f"📩 Hỗ trợ AI & Nâng cấp Gemini Pro / Zalo: 0356.141.136\n"
-        f"#reels #ai #congnghe #thiennguyenai"
+        f"⚡ Follow trang để lưu trọn bộ Series ứng dụng AI thực tế!\n"
+        f"#reels #meoai #aithucchien #congnghe #thiennguyenai"
     )
     r3 = requests.post(
         f"{GRAPH_API}/{page_id}/video_reels",
@@ -101,8 +101,7 @@ def upload_reel(video_path, caption, topic=""):
     clean_line = re.sub(r"#\S+", "", caption).strip()
     cmt = (
         f"📌 {clean_line}\n"
-        f"📩 Cần hỗ trợ công cụ AI hoặc nâng cấp Gemini Pro chính chủ? "
-        f"Nhắn Zalo mình hỗ trợ nhanh nhé: 0356.141.136"
+        f"💬 Bạn đang muốn tự động hóa công việc nào bằng AI? Bình luận bên dưới mình làm hướng dẫn chi tiết nhé!"
     )
     post_reel_comment(video_id, token, cmt)
     return reel_url

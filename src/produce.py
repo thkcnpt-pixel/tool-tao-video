@@ -42,8 +42,9 @@ def build_community_post(topic, script):
             elif sc.get("title"):
                 pts.append(sc["title"])
         bullets = "\n".join(f"✅ {p}" for p in pts[:3])
-        return (f"🤖 {topic}\n{bullets}\n"
-                f"📩 Hỗ trợ AI & Nâng cấp Gemini Pro: Zalo 0356.141.136")[:320]
+        fp = str(script.get("full_prompt") or "").strip()
+        tail = f"📋 Mẫu Prompt: “{fp[:140]}”" if fp else "💬 Bạn đang dùng mẹo AI nào mỗi ngày? Chia sẻ bên dưới nhé!"
+        return f"🤖 {topic}\n{bullets}\n{tail}"[:360]
     except Exception:
         return ""
 
@@ -60,10 +61,17 @@ def retry_pending_youtube(sheets, drive, bot):
     pending_yt = [r for r in sheets.rows() if r["status"] == "CHO_DANG_YT" and r["video_url_or_drive_id"]]
     for row in pending_yt[:2]:
         try:
+            sc_obj = json.loads(row.get("script_json") or "{}")
             with tempfile.TemporaryDirectory() as tmp:
                 mp4 = str(Path(tmp) / f"{row['id']}.mp4")
                 drive.download(row["video_url_or_drive_id"], mp4)
-                yt_res = youtube_uploader.upload_short(mp4, row["caption"], row["topic"], slot=row.get("slot", ""), auto_public=True)
+                yt_res = youtube_uploader.upload_short(
+                    mp4, row["caption"], row["topic"],
+                    slot=row.get("slot", ""), auto_public=True,
+                    pinned_question=sc_obj.get("pinned_question", ""),
+                    youtube_title=sc_obj.get("youtube_title", ""),
+                    full_prompt=sc_obj.get("full_prompt", ""),
+                )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 yt_id = yt_url.rsplit("/", 1)[-1]
                 base_drv = str(row["video_url_or_drive_id"]).split("|")[0]
@@ -118,10 +126,12 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
     rem = buf_left.get("TRUA", 0) + buf_left.get("TOI", 0)
     print(f"[vault] Xuất kho siêu tốc dòng {r} [{eff_slot}]: {row['id']} | drive_id={vid} (Còn {rem}/60 bài trong kho)")
 
-    pinned_q, comm_txt = "", ""
+    pinned_q, yt_title, full_pr, comm_txt = "", "", "", ""
     try:
         sc_obj = json.loads(row.get("script_json") or "{}")
         pinned_q = sc_obj.get("pinned_question", "")
+        yt_title = sc_obj.get("youtube_title", "")
+        full_pr = sc_obj.get("full_prompt", "")
         comm_txt = build_community_post(row["topic"], sc_obj)
     except Exception:
         pass
@@ -136,7 +146,8 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
             try:
                 yt_res = youtube_uploader.upload_short(
                     mp4, row["caption"], row["topic"],
-                    slot=eff_slot, auto_public=True, pinned_question=pinned_q,
+                    slot=eff_slot, auto_public=True,
+                    pinned_question=pinned_q, youtube_title=yt_title, full_prompt=full_pr,
                 )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] Vault Auto-Publish OK ({yt_mode}): {yt_url}")
@@ -267,6 +278,8 @@ def main():
                     a.output, script["caption"], row["topic"],
                     slot=eff_slot, auto_public=True,
                     pinned_question=script.get("pinned_question", ""),
+                    youtube_title=script.get("youtube_title", ""),
+                    full_prompt=script.get("full_prompt", ""),
                 )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] Auto-Publish OK ({yt_mode}): {yt_url}")

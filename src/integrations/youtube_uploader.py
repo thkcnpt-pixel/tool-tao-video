@@ -67,25 +67,32 @@ def next_golden_publish_at(slot=""):
     return None
 
 
-def _split_caption(caption, topic):
+def _split_caption(caption, topic, youtube_title="", full_prompt=""):
     tags = re.findall(r"#\S+", caption)
     clean = re.sub(r"#\S+", "", caption).strip()
-    first_sent = re.split(r"[.!?\n]", clean)[0].strip() or topic or "AI Shorts"
-    title = first_sent[:88].strip()
-    if "#shorts" not in title.lower():
-        title = f"{title} #Shorts"
+    raw_title = re.sub(r"#\S+", "", str(youtube_title or "")).strip(" -–—.|")
+    if not raw_title:
+        raw_title = re.split(r"[.!?\n]", clean)[0].strip() or topic or "Mẹo AI Thực Chiến"
+    title = raw_title[:95].strip()
+
+    prompt_block = (
+        f"📌 MẪU CÂU LỆNH ĐẦY ĐỦ (Copy dùng ngay):\n“{full_prompt.strip()}”\n\n"
+        if full_prompt and full_prompt.strip()
+        else ""
+    )
     desc = (
-        f"{caption}\n\n"
+        f"{prompt_block}"
+        f"{clean}\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 Thiện AI Thực Chiến (@thiennguyen_ai)\n"
-        "⚡ Mẹo AI thực chiến bằng tiếng Việt – video mới mỗi ngày. Bấm Đăng ký để không bỏ lỡ!\n\n"
-        "#Shorts " + " ".join(tags)
+        "⚡ Mẹo AI & Tự động hóa tiếng Việt – bấm Đăng ký để xem trọn bộ Series!\n\n"
+        "#Shorts #MeoAI #AIThucChien " + " ".join(tags)
     )
     return title[:100], desc.strip()
 
 
 def post_top_comment(yt, video_id, comment_text):
-    """Tự động đăng 1 bình luận đầu tiên dưới video YouTube Shorts để tăng tương tác & chuyển đổi."""
+    """Tự động đăng 1 bình luận đầu tiên dưới video YouTube Shorts để giữ chân người xem đọc & copy Prompt."""
     try:
         yt.commentThreads().insert(
             part="snippet",
@@ -96,15 +103,15 @@ def post_top_comment(yt, video_id, comment_text):
                 }
             },
         ).execute()
-        print(f"[youtube] đã tự động đăng bình luận đầu tiên trên video {video_id}")
+        print(f"[youtube] đã tự động đăng bình luận Prompt mẫu trên video {video_id}")
         return True
     except Exception as ex:
         print(f"[youtube] bỏ qua đăng bình luận ({ex!r})")
         return False
 
 
-def fetch_video_views(video_ids):
-    """Đọc số lượt xem (viewCount) thực tế của danh sách video YouTube để Gemini học từ các bài nhiều view."""
+def fetch_video_metrics(video_ids):
+    """Đọc lượt xem + lượt thích + bình luận thực tế và tính điểm chất lượng giữ chân/tương tác (Engagement Score)."""
     if not video_ids:
         return {}
     try:
@@ -113,21 +120,31 @@ def fetch_video_views(video_ids):
         out = {}
         for it in res.get("items", []):
             st = it.get("statistics", {})
-            out[it["id"]] = int(st.get("viewCount", 0))
+            v = int(st.get("viewCount", 0))
+            lk = int(st.get("likeCount", 0))
+            cm = int(st.get("commentCount", 0))
+            # Trọng số tương tác: 1 Like ~ 35 views, 1 Comment ~ 80 views -> ưu tiên bài giữ chân & kích thích hành động thật
+            score = v + lk * 35 + cm * 80
+            out[it["id"]] = {"views": v, "likes": lk, "comments": cm, "score": score}
         return out
     except Exception as ex:
         print(f"[youtube] bỏ qua đọc analytics ({ex!r})")
         return {}
 
 
-def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinned_question=""):
+def fetch_video_views(video_ids):
+    """Đọc số lượt xem (viewCount) thực tế (tương thích ngược)."""
+    metrics = fetch_video_metrics(video_ids)
+    return {vid: m["views"] for vid, m in metrics.items()}
+
+
+def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinned_question="", youtube_title="", full_prompt=""):
     """Upload video lên YouTube Shorts:
-    - Nếu bấm Duyệt trước giờ vàng của ca -> tự động Lên lịch Công khai (Scheduled) đúng 05:00 / 11:30 / 18:00 giờ VN.
-    - Nếu bấm Duyệt sau giờ vàng của ca -> tự động bật Công khai (Public) ngay lập tức.
-    - Tự động đăng 1 bình luận đầu tiên dưới video.
+    - Dùng tiêu đề SEO sạch (không nhồi hashtag) tăng tỷ lệ bấm xem.
+    - Ghim trọn bộ Prompt mẫu đầy đủ vào Bình luận đầu tiên + Mô tả để kéo người xem mở khung bình luận (tăng APV > 110%).
     """
-    yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.upload"])
-    title, desc = _split_caption(caption, topic)
+    yt = get_youtube_service(YT_SCOPES)
+    title, desc = _split_caption(caption, topic, youtube_title=youtube_title, full_prompt=full_prompt)
     publish_at = next_golden_publish_at(slot) if auto_public else None
     if not auto_public:
         privacy = "private"
@@ -161,12 +178,19 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinne
         _, resp = req.next_chunk()
     vid = resp["id"]
     mode_note = f"Scheduled Public ({publish_at})" if publish_at else privacy.upper()
-    print(f"[youtube] upload OK id={vid} mode={mode_note}")
+    print(f"[youtube] upload OK id={vid} title={title!r} mode={mode_note}")
 
-    # Tự động thử đăng bình luận đầu tiên
-    clean_line = re.sub(r"#\S+", "", caption).strip()
-    q_line = pinned_question.strip() if pinned_question else "Bạn đang dùng công cụ AI nào mỗi ngày? Bình luận bên dưới nhé!"
-    comment = f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
-    post_top_comment(yt, vid, comment)
+    q_line = pinned_question.strip() if pinned_question else "Bạn đang tốn nhiều thời gian nhất cho việc nào mỗi ngày? Comment bên dưới nhé!"
+    if full_prompt and full_prompt.strip():
+        comment = (
+            f"📌 MẪU CÂU LỆNH ĐẦY ĐỦ (Chạm giữ để Copy dùng ngay):\n"
+            f"“{full_prompt.strip()}”\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💬 {q_line}"
+        )
+    else:
+        comment = f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
+    if not publish_at and privacy == "public":
+        post_top_comment(yt, vid, comment)
 
     return f"https://youtube.com/shorts/{vid}", mode_note

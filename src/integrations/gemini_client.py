@@ -83,10 +83,29 @@ HOOK_ARCHETYPES = [
 ]
 
 SLOT_CTA_BUTTON = {
-    "SANG": "➕ Follow kênh cập nhật AI mỗi sáng",
-    "TRUA": "💬 Comment \"PROMPT\" nhận câu lệnh mẫu",
-    "TOI": "🔖 Lưu ngay video để áp dụng khi cần",
+    "SANG": "👇 Lấy câu lệnh mẫu ở Bình luận đầu",
+    "TRUA": "📋 Copy trọn bộ Prompt dưới Bình luận",
+    "TOI": "👇 Mở Bình luận lấy mẫu dùng ngay",
 }
+
+SERIES_RULES = [
+    (r"excel|sheet|bảng tính|công thức|csv", "GIẢI CỨU EXCEL"),
+    (r"pdf|word|tài liệu|hợp đồng|báo cáo|slide", "TỐI ƯU TÀI LIỆU"),
+    (r"email|gmail|thư|họp|biên bản", "AI DÂN VĂN PHÒNG"),
+    (r"code|lập trình|python|web|script|tự động", "TỰ ĐỘNG HÓA 30S"),
+    (r"sai lầm|đừng|phí tiền|hiểu sai", "SAI LẦM DÙNG AI"),
+    (r"prompt|câu lệnh", "PROMPT THỰC CHIẾN"),
+]
+
+
+def _suggest_series_badge(topic, ep_num):
+    low = str(topic or "").lower()
+    for pat, label in SERIES_RULES:
+        if re.search(pat, low):
+            return f"{label} #{ep_num}"
+    pool = ("MẸO AI VĂN PHÒNG", "PROMPT THỰC CHIẾN", "AI FREE MÀ MẠNH", "TỰ ĐỘNG HÓA 30S")
+    return f"{pool[ep_num % len(pool)]} #{ep_num}"
+
 
 RSS_URLS = [
     "https://news.google.com/rss/search?q=AI+OR+Gemini+OR+ChatGPT+when:2d&hl=vi&gl=VN&ceid=VN:vi",
@@ -94,7 +113,8 @@ RSS_URLS = [
 ]
 
 SCHEMA_EXAMPLE = {
-    "badge": "MẸO AI THỰC CHIẾN",
+    "badge": "GIẢI CỨU EXCEL #12",
+    "youtube_title": "Sửa lỗi file Excel 1.000 dòng chỉ trong 15 giây bằng AI",
     "bg_theme": "cyber_blue",
     "mascot": True,
     "voice": "vi-VN-HoaiMyNeural",
@@ -115,9 +135,10 @@ SCHEMA_EXAMPLE = {
         {"type": "stat_card", "title": "...", "metric": "10X", "summary": "...", "bullets": ["..", ".."], "voiceover": "..."},
         {"type": "bullet_steps", "title": "...", "steps": ["..", "..", ".."], "voiceover": "..."},
     ],
-    "cta": {"highlight_metric": "70%", "summary": "...", "button_text": "➕ Follow kênh cập nhật AI mỗi sáng", "voiceover": "..."},
-    "caption": "Tiêu đề + mô tả ngắn #ai #congnghe #shorts",
-    "pinned_question": "Theo bạn tính năng AI nào giúp tiết kiệm nhiều thời gian nhất hiện nay? Bình luận ý kiến của bạn nhé!",
+    "cta": {"highlight_metric": "70%", "summary": "Mẫu câu lệnh đầy đủ để sẵn dưới bình luận", "button_text": "📋 Copy trọn bộ Prompt dưới Bình luận", "voiceover": "..."},
+    "caption": "Mô tả ngắn 1-2 câu súc tích #meoai #aithucchien #congnghe #shorts",
+    "full_prompt": "Hãy đóng vai chuyên gia [lĩnh vực], phân tích [dữ liệu/tài liệu đính kèm], chỉ ra 3 vấn đề quan trọng nhất và xuất kết quả thành bảng gồm: Nguyên nhân, Cách khắc phục, Công thức chuẩn.",
+    "pinned_question": "Bạn đang tốn nhiều thời gian nhất cho việc lặp lại nào mỗi ngày? Comment để mình làm tiếp phần sau nhé!",
 }
 
 
@@ -142,10 +163,11 @@ def build_prompt(topic, slot, recent, theme=None, top_hooks=()):
     chosen_theme = theme if theme in THEMES else THEMES[len(recent) % len(THEMES)]
     prof = THEME_VISUAL_PROFILE[chosen_theme]
     voice = ("vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural")[len(recent) % 2]
-    cta_btn = SLOT_CTA_BUTTON.get(slot, "➕ Follow kênh nhận mẹo AI mỗi ngày")
+    cta_btn = SLOT_CTA_BUTTON.get(slot, "📋 Copy trọn bộ Prompt dưới Bình luận")
+    series_badge = _suggest_series_badge(topic, len(recent) + 1)
     hooks_txt = "\n".join("- " + h for h in top_hooks) if top_hooks else "(đang thu thập dữ liệu)"
     scene_range = "2 đến 3" if (len(recent) % 2 == 0) else "3 đến 4"
-    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (18-30 giây).
+    return f"""Bạn là biên tập viên video ngắn tiếng Việt cho kênh 'Thiện AI Thực Chiến' (18-28 giây).
 Chủ đề: {topic}
 {SLOT_HINT.get(slot, '')}
 Dùng bg_theme = "{chosen_theme}".
@@ -159,23 +181,25 @@ Các video hiệu quả nhất của kênh để học phong cách giật tít H
 Yêu cầu:
 - Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây, không markdown.
 - Tiếng Việt có dấu, tự nhiên, tuyệt đối không dùng từ mua bán lộ liễu, không đọc số điện thoại/Zalo.
+- badge: đặt đúng theo format Series có đánh số là "{series_badge}" (giúp người xem theo dõi trọn bộ Series trên kênh).
+- youtube_title: tiêu đề tối ưu CTR & tìm kiếm tiếng Việt (35-58 ký tự), có con số hoặc kết quả cụ thể gây tò mò, KHÔNG chứa dấu # hay hashtag.
 - HOOK 2 GIÂY ĐẦU: hook.voiceover tối đa 12 từ, đánh thẳng vào kết quả/nỗi đau cụ thể (con số, thời gian), không chào hỏi.
-- Mỗi cảnh CHỮ TRÊN MÀN HÌNH CỰC NGẮN (ưu tiên 3-6 từ/mục) để đọc được trên điện thoại; chi tiết đưa vào voiceover.
-- badge: đặt nhãn ngắn đa dạng theo chủ đề (VD: MẸO EXCEL, PROMPT HAY, TỰ ĐỘNG HÓA, SAI LẦM AI), KHÔNG dùng lặp "TIN CÔNG NGHỆ 2026".
+- Mỗi cảnh CHỮ TRÊN MÀN HÌNH CỰC NGẮN (ưu tiên 3-6 từ/mục) để đọc được ngay trên điện thoại; chi tiết đưa vào voiceover.
 - hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[len(recent) % len(HOOK_ARCHETYPES)]}
 - scenes: chọn {scene_range} cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
 - checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 30 ký tự).
 - ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 30 ký tự).
-- prompt_card: prompt_text là 1 câu lệnh mẫu thực tế 10-18 từ; result_note tối đa 40 ký tự.
+- prompt_card: prompt_text là câu lệnh tóm tắt 10-18 từ dễ đọc trên màn hình; result_note tối đa 40 ký tự.
 - myth_vs_fact: myth và fact mỗi mục tối đa 40 ký tự.
 - comparison: left_items và right_items cùng 3 mục, mỗi mục tối đa 28 ký tự. bullet_steps: đúng 3 bước, mỗi bước tối đa 40 ký tự.
 - stat_card & cta: metric / highlight_metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%).
-- cta.button_text: đặt đúng là "{cta_btn}".
-- pinned_question: 1 câu hỏi mở thú vị liên quan trực tiếp đến chủ đề để đăng làm bình luận ghim kích thích người xem tranh luận.
-- Mỗi voiceover 10-20 từ (tổng toàn video 45-100 từ).
+- cta.button_text: đặt đúng là "{cta_btn}". Trong `cta.voiceover`, khéo léo nhắc người xem lấy câu lệnh đầy đủ dưới phần bình luận trước khi nối sang cụm cầu nối vòng lặp.
+- full_prompt: trọn bộ câu lệnh Prompt mẫu ĐẦY ĐỦ, CHI TIẾT (30-60 từ, có ngoặc vuông [như thế này] ở chỗ người dùng tự thay thông tin) để hệ thống tự động ghim vào Bình luận đầu tiên trên YouTube cho khán giả copy dùng ngay!
+- pinned_question: 1 câu hỏi mở ngắn gọn kích thích tranh luận dưới bình luận.
+- Mỗi voiceover 10-20 từ (tổng toàn video 45-95 từ).
 - KỸ THUẬT CÂU GHÉP VÒNG LẶP (SPLIT-SENTENCE SEAMLESS LOOP — BẮT BUỘC):
   + Câu cuối của `cta.voiceover` và câu đầu của `hook.voiceover` PHẢI LÀ 2 NỬA CỦA CÙNG MỘT CÂU TIẾNG VIỆT!
-  + Cụ thể: `cta.voiceover` kết thúc bằng một cụm dẫn mở KHÔNG CÓ DẤU CHẤM CUỐI (ví dụ: "...giúp bạn tiết kiệm 70% thời gian mỗi ngày, và lý do chính là vì"), còn `hook.voiceover` bắt đầu nối tiếp luôn vào cụm đó (ví dụ: "90% người dùng AI vẫn đang làm thủ công bước này mà chưa biết...").
+  + Cụ thể: `cta.voiceover` kết thúc bằng một cụm dẫn mở KHÔNG CÓ DẤU CHẤM CUỐI (ví dụ: "...trọn bộ câu lệnh mình để sẵn dưới bình luận, và lý do chính là vì"), còn `hook.voiceover` bắt đầu nối tiếp luôn vào cụm đó (ví dụ: "90% người dùng AI vẫn đang làm thủ công bước này...").
   + TUYỆT ĐỐI KHÔNG ĐƯỢC copy nguyên câu của hook.voiceover sang cta.voiceover!
 - mascot={str(prof["mascot"]).lower()}, voice="{voice}", voice_rate="+12%".
 
@@ -278,13 +302,27 @@ def validate(s, slot=""):
             sc["steps"] = [str(x).strip()[:75] for x in sc["steps"][:4]]
     c = s.get("cta")
     need(isinstance(c, dict) and c.get("highlight_metric") and c.get("summary") and c.get("voiceover"), "cta sai")
-    c["button_text"] = SLOT_CTA_BUTTON.get(slot) or c.get("button_text") or "➕ Follow kênh nhận mẹo AI mỗi ngày"
+    c["button_text"] = SLOT_CTA_BUTTON.get(slot) or c.get("button_text") or "📋 Copy trọn bộ Prompt dưới Bình luận"
     need(isinstance(s.get("caption"), str) and s["caption"].strip(), "thiếu caption")
-    s.setdefault("pinned_question", "Bạn đang áp dụng công cụ AI nào cho công việc hàng ngày? Chia sẻ dưới phần bình luận nhé!")
+
+    yt_title = re.sub(r"#\S+", "", str(s.get("youtube_title") or "")).strip(" -–—.|")
+    if not yt_title:
+        clean_cap = re.sub(r"#\S+", "", s["caption"]).strip()
+        yt_title = re.split(r"[.!?\n]", clean_cap)[0].strip()
+    s["youtube_title"] = sanitize_tiktok_text(yt_title[:70])
+
+    full_pr = str(s.get("full_prompt") or "").strip()
+    if not full_pr:
+        for sc in s["scenes"]:
+            if sc.get("prompt_text"):
+                full_pr = str(sc["prompt_text"]).strip()
+                break
+    s["full_prompt"] = full_pr[:420]
+    s.setdefault("pinned_question", "Bạn đang tốn nhiều thời gian nhất cho việc lặp lại nào mỗi ngày? Chia sẻ dưới bình luận nhé!")
 
     all_vo = [h["voiceover"]] + [sc["voiceover"] for sc in s["scenes"]] + [c["voiceover"]]
     total_words = sum(len(str(v).split()) for v in all_vo)
-    need(40 <= total_words <= 180, f"tổng số từ voiceover không hợp lý ({total_words} từ)")
+    need(38 <= total_words <= 180, f"tổng số từ voiceover không hợp lý ({total_words} từ)")
 
     h["voiceover"] = sanitize_tiktok_text(h["voiceover"])
     for sc in s["scenes"]:
@@ -301,50 +339,52 @@ def _fallback_script(topic, slot, theme):
     l1 = " ".join(words[:4])[:18] or "Mẹo AI thực chiến"
     l2 = " ".join(words[4:8])[:18] or "giúp tiết kiệm giờ"
     return validate({
-        "badge": "THIỆN AI THỰC CHIẾN",
-        "bg_theme": theme if theme in THEMES else "cyber_blue",
-        "mascot": True,
+        "badge": _suggest_series_badge(topic, 1),
+        "youtube_title": f"{topic[:52]} chỉ trong 15 giây",
+        "bg_theme": theme if theme in THEMES else "clean_light",
+        "mascot": False,
         "voice": SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural"),
         "voice_rate": "+12%",
         "hook": {
             "headline": [l1, l2, "Áp dụng ngay!"],
-            "voiceover": f"Đây là bí quyết về {topic} giúp bạn xử lý công việc nhanh gấp nhiều lần mỗi ngày.",
+            "voiceover": f"Đừng làm thủ công nữa, mẹo {topic} này rút ngắn hàng giờ làm việc.",
         },
         "scenes": [
             {
                 "type": "myth_vs_fact",
                 "title": "Cách tiếp cận đúng",
-                "myth": "Làm thủ công tốn hàng giờ hoặc hỏi AI câu ngắn cụt lủn",
-                "fact": "Giao rõ vai trò, dữ liệu đầu vào và định dạng kết quả mong muốn",
-                "voiceover": "Thay vì làm thủ công tốn hàng giờ, bạn chỉ cần cung cấp rõ ngữ cảnh và định dạng đầu ra cho AI.",
+                "myth": "Hỏi AI câu ngắn cụt lủn thiếu ngữ cảnh",
+                "fact": "Giao rõ vai trò, dữ liệu và bảng kết quả",
+                "voiceover": "Thay vì hỏi chung chung tốn hàng giờ chỉnh sửa, hãy giao rõ vai trò và định dạng bảng đầu ra.",
             },
             {
                 "type": "bullet_steps",
                 "title": "3 bước thực hiện chuẩn",
                 "steps": [
-                    "Chuẩn bị nội dung hoặc tài liệu cần xử lý rõ ràng",
-                    "Nhập câu lệnh yêu cầu tóm tắt kèm bảng hành động cụ thể",
-                    "Kiểm tra lại các con số quan trọng trước khi xuất bản",
+                    "Đính kèm dữ liệu hoặc nội dung gốc",
+                    "Dán câu lệnh mẫu kèm yêu cầu xuất bảng",
+                    "Đối chiếu nhanh các con số quan trọng",
                 ],
-                "voiceover": "Áp dụng đúng ba bước từ chuẩn bị dữ liệu, giao câu lệnh chi tiết đến kiểm tra nhanh kết quả cuối cùng.",
+                "voiceover": "Chỉ cần tải tài liệu lên, dán câu lệnh mẫu rồi kiểm tra nhanh các con số quan trọng nhất.",
             },
             {
                 "type": "stat_card",
                 "title": "Hiệu quả thực tế",
                 "metric": "5X",
-                "summary": "Tăng tốc độ hoàn thành công việc hàng ngày",
-                "bullets": ["Giảm sai sót thủ công", "Dễ áp dụng cho mọi ngành nghề"],
-                "voiceover": "Quy trình gọn nhẹ này giúp tăng gấp năm lần tốc độ xử lý tài liệu và giảm hẳn sai sót.",
+                "summary": "Tăng tốc xử lý việc lặp lại mỗi ngày",
+                "bullets": ["Giảm sai sót thủ công", "Áp dụng ngay trong 15 giây"],
+                "voiceover": "Quy trình gọn nhẹ này giúp tăng gấp năm lần tốc độ xử lý và giảm hẳn sai sót.",
             },
         ],
         "cta": {
             "highlight_metric": "70%",
-            "summary": "Tiết kiệm 70% thời gian làm việc lặp lại mỗi ngày",
-            "button_text": SLOT_CTA_BUTTON.get(slot, "➕ Follow kênh cập nhật AI mỗi sáng"),
-            "voiceover": "Làm chủ công cụ thông minh giúp bạn tiết kiệm bảy mươi phần trăm thời gian, và đây chính là lý do",
+            "summary": "Câu lệnh đầy đủ để sẵn dưới bình luận",
+            "button_text": SLOT_CTA_BUTTON.get(slot, "📋 Copy trọn bộ Prompt dưới Bình luận"),
+            "voiceover": "Trọn bộ câu lệnh mẫu mình ghim sẵn dưới phần bình luận, và lý do bạn nên lưu ngay là vì",
         },
-        "caption": f"{topic} cực dễ áp dụng trong 30 giây! #ai #congnghe #thiennguyenai #shorts",
-        "pinned_question": f"Bạn đã thử áp dụng AI cho '{topic}' chưa? Để lại bình luận bên dưới nhé!",
+        "caption": f"{topic} cực dễ áp dụng trong 20 giây! #meoai #aithucchien #congnghe #shorts",
+        "full_prompt": f"Hãy đóng vai chuyên gia xử lý {topic}, phân tích dữ liệu [đính kèm tại đây], chỉ ra 3 điểm cốt lõi nhất và trình bày kết quả dưới dạng bảng hành động chi tiết để áp dụng ngay.",
+        "pinned_question": f"Bạn đã thử dùng AI cho '{topic}' chưa? Để lại bình luận bên dưới nhé!",
     }, slot=slot)
 
 
@@ -409,10 +449,10 @@ def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries
         for attempt in range(retries + 1):
             try:
                 raw, key_idx = _call_with_rotation(model, prompt, keys)
+                if isinstance(raw, dict) and theme in THEMES:
+                    raw["bg_theme"] = theme
                 script = validate(raw, slot=slot)
-                if theme in THEMES:
-                    script["bg_theme"] = theme
-                print(f"[gemini] OK model={model} key=#{key_idx} voice={script['voice']} scenes={[x['type'] for x in script['scenes']]}")
+                print(f"[gemini] OK model={model} key=#{key_idx} theme={script['bg_theme']} voice={script['voice']} scenes={[x['type'] for x in script['scenes']]}")
                 return script
             except Exception as ex:
                 msg = str(ex)

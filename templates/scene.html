@@ -10,6 +10,7 @@
   <div id="badge"></div>
   <div id="seg-idx"></div>
   <div id="stage"></div>
+  <div id="flash"></div>
   <div id="sub"></div>
   <div id="watermark">Thiện AI Thực Chiến • @thiennguyen.ai</div>
   <svg id="laser-svg" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
@@ -88,6 +89,21 @@ const EYES = {
 let curExpr = '';
 function setExpr(e) { if (e !== curExpr) { document.getElementById('eyes').innerHTML = EYES[e] || EYES.happy; curExpr = e; } }
 
+function buildHookMockup(ctxText) {
+  const s = String(ctxText || '').toLowerCase();
+  let cls = 'ai', icon = '✦ Gemini • GPT-4o', st = '⚡ Xử lý 10 giây', bad = 'Làm tay 2 giờ', good = '✓ Tự động x10';
+  if (/excel|sheet|bảng|công thức|csv|dòng|cột/.test(s)) {
+    cls = 'excel'; icon = '📊 Excel • Google Sheets'; st = 'fx Auto-Fix'; bad = '#REF! #VALUE!'; good = '✓ Chuẩn 100%';
+  } else if (/pdf|word|tài liệu|hợp đồng|báo cáo|trang|sách|slide/.test(s)) {
+    cls = 'pdf'; icon = '📄 AI Document Scanner'; st = '⚡ Đọc siêu tốc'; bad = 'Đọc 100 trang'; good = '✓ Tóm tắt 15s';
+  } else if (/email|gmail|thư|họp|biên bản|lịch/.test(s)) {
+    cls = 'mail'; icon = '✉️ Smart Workspace AI'; st = '⚡ Soạn tự động'; bad = 'Gõ tay 30 phút'; good = '✓ Xong 1 chạm';
+  } else if (/code|lập trình|python|web|script|tự động|tool/.test(s)) {
+    cls = 'code'; icon = '💻 AI Automation Flow'; st = '▶ Đang chạy'; bad = 'Lặp lại nhàm chán'; good = '✓ 0 lỗi • 15s';
+  }
+  return $(`<div class="app-mock"><div class="app-mock-top"><span class="app-pill ${cls}">${icon}</span><span class="app-status">${st}</span></div><div class="app-mock-body"><span class="bad-tag">${bad}</span><span>➔</span><span class="good-tag">${good}</span></div></div>`);
+}
+
 function build(seg, idx) {
   const el = $('<div class="seg"></div>');
   el.dataset.type = seg.type;
@@ -96,9 +112,11 @@ function build(seg, idx) {
   const add = (node, at) => { node.classList.add('reveal'); el.appendChild(node); R.push([node, at]); return node; };
   seg.R = R; seg.wp = wp;
   if (seg.type === 'hook') {
+    const ctx = `${T.topic || ''} ${T.badge || ''} ${(d.headline || []).join(' ')} ${d.voiceover || ''}`;
+    add(buildHookMockup(ctx), 0.0);
     d.headline.forEach((line, i) => {
       const last = i === d.headline.length - 1;
-      const n = add($(`<div class="hl-line ${last ? 'last' : ''}"><span>${esc(line)}</span></div>`), i * 0.10);
+      const n = add($(`<div class="hl-line ${last ? 'last' : ''}"><span>${esc(line)}</span></div>`), i * 0.09);
       if (last) seg.anchor = n.firstChild;
     });
     wp.push({ frac: 0.15, get: () => seg.anchor, expr: 'amazed' });
@@ -273,13 +291,18 @@ function seek(t) {
   if (s.chk) s.chk.forEach(c => c.el.classList.toggle('done', p >= c.start));
   if (s.rk) s.rk.forEach(k => k.el.classList.toggle('active', k.isTop1 ? p >= k.start : (p >= k.start && p < k.end)));
 
-  // Phụ đề Karaoke + Emoji tự động ở từ đang đọc
+  // Phụ đề Karaoke + Emoji tự động ở từ đang đọc + Camera Punch-in theo từ khóa
   const sub = document.getElementById('sub');
   const c = (s.subs || []).find(c => lt >= c.s && lt < c.e);
+  let kwPunch = 0;
   if (c) {
     const wt = c.wt || c.words.map(w => ({ w, s: c.s, e: c.e }));
     let ai = wt.findIndex(x => lt >= x.s && lt < x.e);
     if (ai < 0) ai = lt < wt[0].s ? 0 : wt.length - 1;
+    if (ai === c.kw && wt[ai]) {
+      const uKw = clamp((lt - wt[ai].s) / Math.max(0.14, wt[ai].e - wt[ai].s));
+      kwPunch = Math.sin(Math.PI * uKw);
+    }
     sub.innerHTML = wt.map((x, i) => {
       const st = i === ai ? 'active' : (i < ai ? 'past' : 'future');
       const kw = i === c.kw ? ' kw' : '';
@@ -288,6 +311,10 @@ function seek(t) {
     }).join('');
     sub.style.opacity = 1;
   } else sub.style.opacity = 0;
+
+  document.getElementById('stage').style.transform = kwPunch > 0.01 ? `scale(${(1 + 0.032 * kwPunch).toFixed(4)})` : 'none';
+  const flashOp = (si > 0 && lt < 0.15) ? (0.16 * (1 - lt / 0.15)) : 0;
+  document.getElementById('flash').style.opacity = flashOp.toFixed(3);
 
   // Robot + Laser Pointer Beam nối từ đầu ngón tay (x+10, y+103) tới thẻ đang highlight
   const r = robotAt(t);

@@ -71,25 +71,30 @@ class SheetsClient:
         self.svc.values().batchUpdate(spreadsheetId=self.sheet_id,
                                       body={"valueInputOption": "RAW", "data": data}).execute()
 
-    def top_performing_hooks(self, n=3):
-        """Trả về danh sách các chủ đề/caption đã đăng (ưu tiên sắp theo lượt xem YouTube nếu có)."""
+    def top_performing_hooks(self, n=4):
+        """Trả về danh sách các chủ đề/tiêu đề hiệu quả nhất sắp theo Điểm Tương Tác (Views + 35*Likes + 80*Comments)."""
         try:
-            from youtube_uploader import fetch_video_views
+            from youtube_uploader import fetch_video_metrics
         except Exception:
-            fetch_video_views = lambda ids: {}
+            fetch_video_metrics = lambda ids: {}
         published = [r for r in self.rows() if r["status"] == "DA_DANG" and r["topic"]]
         yt_map = {}
         for r in published:
             ref = str(r.get("video_url_or_drive_id", ""))
             if "|" in ref:
                 yt_map[ref.split("|", 1)[1]] = r
-        views = fetch_video_views(list(yt_map.keys())) if yt_map else {}
+        metrics = fetch_video_metrics(list(yt_map.keys())) if yt_map else {}
         scored = []
         for r in published:
             ref = str(r.get("video_url_or_drive_id", ""))
             yid = ref.split("|", 1)[1] if "|" in ref else ""
-            v = views.get(yid, 0)
-            scored.append((v, f"{r['topic']} (Caption: {r['caption'][:80]})" + (f" [{v} views]" if v else "")))
+            m = metrics.get(yid, {"views": 0, "likes": 0, "comments": 0, "score": 0})
+            stat_tag = (
+                f" [{m['views']} xem, {m['likes']} thích, {m['comments']} bình luận | theme={r.get('bg_theme', '')}]"
+                if m["views"]
+                else ""
+            )
+            scored.append((m["score"], f"{r['topic']} (Caption: {r['caption'][:75]}){stat_tag}"))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [x[1] for x in scored[:n]]
 
