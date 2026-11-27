@@ -113,6 +113,13 @@ class SheetsClient:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         winners = [x[4] for x in scored[:4]]
+        try:
+            from tiktok_uploader import fetch_tiktok_top_videos
+            tt_winners = fetch_tiktok_top_videos(2)
+            if tt_winners:
+                winners = winners[:3] + tt_winners
+        except Exception:
+            pass
         with_views = [x for x in scored if x[1] > 0]
         losers = [f"{x[2]} ({x[1]} xem)" for x in with_views[-3:]] if len(with_views) >= 5 else []
         best_themes = sorted(theme_scores.keys(), key=lambda k: sum(theme_scores[k]) / len(theme_scores[k]), reverse=True)

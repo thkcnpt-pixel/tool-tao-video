@@ -2,12 +2,13 @@ name: Produce Short Video (3 ca/ngày)
 
 on:
   schedule:
-    # Ca 1 (Sáng 07:00 VN) -> Render lúc 06:00 VN (23:00 UTC hôm trước)
-    - cron: "0 23 * * *"
-    # Ca 2 (Trưa 12:00 VN) -> Render lúc 11:00 VN (04:00 UTC)
-    - cron: "0 4 * * *"
-    # Ca 3 (Tối 20:00 VN)  -> Render lúc 19:00 VN (12:00 UTC)
-    - cron: "0 12 * * *"
+    # Đặt ở phút :43 (tránh kẹt hàng đợi :00/:30 của GitHub) & trước giờ vàng ~2 tiếng để YouTube xử lý HD + lên lịch chuẩn từng giây:
+    # Ca 1 (Sáng 07:00 VN) -> Chạy lúc 04:43 VN (21:43 UTC hôm trước)
+    - cron: "43 21 * * *"
+    # Ca 2 (Trưa 12:00 VN) -> Chạy lúc 09:43 VN (02:43 UTC)
+    - cron: "43 2 * * *"
+    # Ca 3 (Tối 20:00 VN)  -> Chạy lúc 17:43 VN (10:43 UTC)
+    - cron: "43 10 * * *"
   workflow_dispatch:
     inputs:
       slot:
@@ -44,11 +45,10 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install FFmpeg & Python dependencies
+      - name: Install FFmpeg & Python dependencies (Chromium cài tự động chỉ khi dựng Live)
         run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg fonts-noto-core
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
           pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
 
       - name: Produce video & send to Telegram for approval
         env:
@@ -68,6 +68,7 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          TIKTOK_CREDENTIALS_JSON: ${{ secrets.TIKTOK_CREDENTIALS_JSON }}
         run: |
           ARGS=""
           if [ -n "${{ github.event.inputs.slot }}" ]; then

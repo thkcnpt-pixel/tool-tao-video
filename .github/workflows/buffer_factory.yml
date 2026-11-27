@@ -2,14 +2,12 @@ name: Buffer Factory (Kho Dự Trữ 60 Video 30 Ngày - Trưa & Tối)
 
 on:
   schedule:
-    # Chạy 4 đợt thấp điểm mỗi ngày (01:15, 07:15, 13:30, 20:30 giờ VN) dựng mỗi đợt 3 video
-    # -> Tự động lấp đầy kho 60 video (30 Trưa + 30 Tối = 30 ngày), khi đủ 60 video sẽ tự nghỉ sau 5 giây!
-    - cron: "15 18 * * *"
-    - cron: "30 22 * * *"
-    - cron: "30 1 * * *"
-    - cron: "30 5 * * *"
-    - cron: "30 8 * * *"
-    - cron: "30 13 * * *"
+    # Đặt sau các khung giờ vàng (07:19, 12:19, 20:19 VN + đêm thấp điểm) để vừa đăng bù Bình luận Prompt ngay sau khi video lên sóng, vừa dựng bù kho đầy 14/14:
+    - cron: "19 0 * * *"
+    - cron: "19 5 * * *"
+    - cron: "19 9 * * *"
+    - cron: "19 13 * * *"
+    - cron: "19 17 * * *"
   workflow_dispatch:
     inputs:
       batch_size:
@@ -44,9 +42,8 @@ jobs:
 
       - name: Install FFmpeg & Python dependencies
         run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg fonts-noto-core
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
           pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
 
       - name: Pre-render Evergreen Videos into 30-Day Google Drive Vault
         env:
@@ -64,6 +61,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          TIKTOK_CREDENTIALS_JSON: ${{ secrets.TIKTOK_CREDENTIALS_JSON }}
         run: |
           BS="${{ github.event.inputs.batch_size || '3' }}"
           NOTIFY_FLAG=""

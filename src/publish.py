@@ -103,6 +103,13 @@ def main():
             except Exception as ex:
                 print(f"[facebook] CẢNH BÁO ({ex!r})")
 
+        import tiktok_uploader
+        if tiktok_uploader.is_configured():
+            try:
+                tiktok_uploader.upload_tiktok(mp4, row["caption"])
+            except Exception as ex:
+                print(f"[tiktok] CẢNH BÁO ({ex!r})")
+
         bot = TelegramBot()
         final_mid = bot.send_final(
             mp4,

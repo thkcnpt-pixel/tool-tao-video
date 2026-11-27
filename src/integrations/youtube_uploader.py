@@ -248,17 +248,60 @@ def upload_short(video_path, caption, topic="", slot="", auto_public=True, pinne
     mode_note = f"Scheduled Public ({publish_at})" if publish_at else privacy.upper()
     print(f"[youtube] upload OK id={vid} title={title!r} mode={mode_note}")
 
-    q_line = pinned_question.strip() if pinned_question else "Bạn đang tốn nhiều thời gian nhất cho việc nào mỗi ngày? Comment bên dưới nhé!"
-    if full_prompt and full_prompt.strip():
-        comment = (
-            f"📌 MẪU CÂU LỆNH ĐẦY ĐỦ (Chạm giữ để Copy dùng ngay):\n"
-            f"“{full_prompt.strip()}”\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💬 {q_line}"
-        )
-    else:
-        comment = f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
+    comment = format_prompt_comment(full_prompt, pinned_question)
     if not publish_at and privacy == "public":
         post_top_comment(vid, comment)
 
     return f"https://youtube.com/shorts/{vid}", mode_note
+
+
+def format_prompt_comment(full_prompt="", pinned_question=""):
+    q_line = (pinned_question or "").strip() or "Bạn đang tốn nhiều thời gian nhất cho việc nào mỗi ngày? Comment bên dưới nhé!"
+    if full_prompt and str(full_prompt).strip():
+        return (
+            f"📌 MẪU CÂU LỆNH ĐẦY ĐỦ (Chạm giữ để Copy dùng ngay):\n"
+            f"“{str(full_prompt).strip()}”\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💬 {q_line}"
+        )
+    return f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
+
+
+def backfill_scheduled_comments(rows, check_latest=6):
+    """Tự động đăng bù Bình luận đầu tiên (chứa Full Prompt) cho các video Scheduled Public ngay sau khi đến giờ lên sóng Công khai."""
+    candidates = []
+    for r in reversed(rows):
+        if r.get("status") != "DA_DANG":
+            continue
+        ref = str(r.get("video_url_or_drive_id", ""))
+        if "|" in ref:
+            candidates.append((ref.split("|", 1)[1], r))
+        if len(candidates) >= check_latest:
+            break
+    if not candidates:
+        return 0
+    try:
+        yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.readonly"])
+        vids = [c[0] for c in candidates]
+        res = yt.videos().list(part="status,statistics", id=",".join(vids)).execute()
+        info = {it["id"]: it for it in res.get("items", [])}
+    except Exception:
+        return 0
+
+    posted = 0
+    for vid, row in candidates:
+        it = info.get(vid)
+        if not it:
+            continue
+        priv = it.get("status", {}).get("privacyStatus")
+        cmts = int(it.get("statistics", {}).get("commentCount", 0))
+        if priv == "public" and cmts == 0:
+            sc_obj = {}
+            try:
+                sc_obj = json.loads(row.get("script_json") or "{}")
+            except Exception:
+                pass
+            cmt = format_prompt_comment(sc_obj.get("full_prompt", ""), sc_obj.get("pinned_question", ""))
+            if post_top_comment(vid, cmt):
+                posted += 1
+    return posted

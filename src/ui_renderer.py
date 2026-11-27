@@ -1,6 +1,8 @@
 """Playwright Async + 3 Tab song song + CDP captureScreenshot: tăng tốc render ~2x (117ms -> 62ms/khung)."""
 import asyncio
 import base64
+import subprocess
+import sys
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -9,15 +11,27 @@ TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "scene.html"
 WORKERS = 3
 
 
+async def _launch_browser(p):
+    launch_args = [
+        "--font-render-hinting=none",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-sandbox",
+    ]
+    try:
+        return await p.chromium.launch(args=launch_args)
+    except Exception:
+        print("[ui] Chromium chưa cài sẵn -> cài nhanh theo nhu cầu (on-demand)...")
+        subprocess.run(["sudo", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"], check=False)
+        subprocess.run(["sudo", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "fonts-noto-core"], check=False)
+        subprocess.run([sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"], check=True)
+        return await p.chromium.launch(args=launch_args)
+
+
 async def _produce_batches(timeline, fps, save_dir, q):
     total = round(timeline["total"] * fps)
     async with async_playwright() as p:
-        browser = await p.chromium.launch(args=[
-            "--font-render-hinting=none",
-            "--disable-gpu",
-            "--disable-dev-shm-usage",
-            "--no-sandbox",
-        ])
+        browser = await _launch_browser(p)
         pages, cdps = [], []
         n_wp = 0
         for w in range(WORKERS):

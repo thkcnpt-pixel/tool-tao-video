@@ -62,8 +62,13 @@ def main():
     sheets = SheetsClient()
     sheets.ensure_tab()
     sheets.recover_stale_locks()
+    try:
+        import youtube_uploader
+        youtube_uploader.backfill_scheduled_comments(sheets.rows())
+    except Exception:
+        pass
     drive = DriveClient()
-    top_hooks = sheets.top_performing_hooks(3)
+    top_hooks = sheets.top_performing_hooks(4)
     made = []
 
     for step in range(a.batch_size):

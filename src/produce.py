@@ -21,6 +21,7 @@ from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
 import youtube_uploader  # noqa: E402
 import facebook_uploader  # noqa: E402
+import tiktok_uploader  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 VN = datetime.timezone(datetime.timedelta(hours=7))
@@ -166,7 +167,13 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
                 except Exception as ex:
                     print(f"[facebook] CẢNH BÁO ({ex!r})")
 
-        vault_note = f"Đã kiểm duyệt sẵn • Tồn kho còn {rem}/60 video"
+            if tiktok_uploader.is_configured():
+                try:
+                    tiktok_uploader.upload_tiktok(mp4, row["caption"])
+                except Exception as ex:
+                    print(f"[tiktok] CẢNH BÁO ({ex!r})")
+
+        vault_note = f"Đã kiểm duyệt sẵn • Tồn kho còn {rem}/14 video"
         msg_id = bot.send_for_approval(
             mp4, row["id"], row["topic"], row["caption"],
             drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=vault_note, community_post=comm_txt,
@@ -196,6 +203,7 @@ def main():
     try:
         bot.clear_pending_webhook()
         retry_pending_youtube(sheets, drive, bot)
+        youtube_uploader.backfill_scheduled_comments(sheets.rows())
     except Exception:
         pass
 
@@ -300,6 +308,12 @@ def main():
                     fb_url = facebook_uploader.upload_reel(a.output, script["caption"], row["topic"])
                 except Exception as ex:
                     print(f"[facebook] CẢNH BÁO ({ex!r})")
+
+            if tiktok_uploader.is_configured():
+                try:
+                    tiktok_uploader.upload_tiktok(a.output, script["caption"])
+                except Exception as ex:
+                    print(f"[tiktok] CẢNH BÁO ({ex!r})")
 
         msg_id = bot.send_for_approval(a.output, row["id"], row["topic"], script["caption"],
                                        drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=qa_note, community_post=build_community_post(row["topic"], script))

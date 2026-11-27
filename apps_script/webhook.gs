@@ -83,9 +83,9 @@ var HELP_TEXT =
   '• ✅ Duyệt: Bấm nút [✅ Duyệt] -> Tự động đăng lên YouTube Shorts (tự lên lịch giờ vàng hoặc bật Public ngay) + trả Bản Final sạch về đây để bạn đăng TikTok.\n' +
   '• ❌ Hủy: Bỏ qua video đó.\n\n' +
   '3️⃣ LỊCH CHẠY TỰ ĐỘNG HÀNG NGÀY (GIỜ VN):\n' +
-  '• Ca Sáng: 04:00 dựng -> 05:00 lên sóng\n' +
-  '• Ca Trưa: 10:30 dựng -> 11:30 lên sóng\n' +
-  '• Ca Tối: 17:00 dựng -> 18:00 lên sóng\n' +
+  '• Ca Sáng: 04:43 dựng Live -> 07:00 lên sóng\n' +
+  '• Ca Trưa: 09:43 xuất Kho  -> 12:00 lên sóng\n' +
+  '• Ca Tối:  17:43 xuất Kho  -> 20:00 lên sóng\n' +
   '🔗 Google Sheet: https://docs.google.com/spreadsheets/d/' + DEFAULT_SHEET_ID + '/edit';
 
 function doPost(e) {
@@ -176,7 +176,7 @@ function doPost(e) {
         var now = new Date();
         var vnStr = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyyMMdd_HHmmss');
         var dateStr = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
-        var themes = ['cyber_blue', 'neon_purple', 'emerald_tech', 'sunset_amber'];
+        var themes = ['clean_light', 'brutal_dark', 'cyber_blue', 'paper_cream', 'emerald_tech', 'warm_editorial', 'neon_purple', 'sunset_amber'];
         var pickTheme = themes[now.getSeconds() % themes.length];
         var newId = vnStr + '_QUEUE';
         shAdd.appendRow([newId, dateStr, 'SANG', newTopic, pickTheme, '', '', 'CHO_TAO', '', '']);
@@ -186,7 +186,7 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /kho (xem tồn kho 60 video dựng sẵn 30 ngày cho Ca Trưa & Ca Tối)
+      // Lệnh /kho (xem tồn kho thông minh 14 video cho Ca Trưa & Ca Tối)
       if (/^\/kho(@\S+)?$/i.test(txt)) {
         var dK = getSheet_().getDataRange().getValues();
         var bTrua = 0, bToi = 0, qTao = 0;
@@ -201,14 +201,14 @@ function doPost(e) {
         var bTotal = bTrua + bToi;
         var daysReady = Math.min(bTrua, bToi);
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
-          text: '📦 KHO DỰ TRỮ VIDEO 30 NGÀY (TRƯA & TỐI):\n'
+          text: '📦 KHO DỰ TRỮ THÔNG MINH 7 NGÀY (TRƯA & TỐI):\n'
               + '━━━━━━━━━━━━━━━━━━━━\n'
-              + '• Tổng video đã dựng sẵn trên Drive: ' + bTotal + '/60 video\n'
-              + '  ☀️ Ca Trưa (11:30): ' + bTrua + '/30 video\n'
-              + '  🌙 Ca Tối (18:00): ' + bToi + '/30 video\n'
+              + '• Tổng video đã dựng sẵn trên Drive: ' + bTotal + '/14 video\n'
+              + '  ☀️ Ca Trưa (12:00): ' + bTrua + '/7 video\n'
+              + '  🌙 Ca Tối (20:00): ' + bToi + '/7 video\n'
               + '• Chủ đề chờ dựng (CHO_TAO): ' + qTao + ' bài\n\n'
               + '✨ Đủ phát sóng tự động liên tục: ~' + daysReady + ' ngày!\n'
-              + '(🌅 Riêng Ca Sáng 05:00 luôn săn tin nóng & dựng trực tiếp mỗi sáng.\n'
+              + '(🌅 Riêng Ca Sáng 07:00 luôn săn tin nóng & dựng trực tiếp mỗi sáng.\n'
               + '💡 Gõ /nap_kho nếu muốn dựng nạp thêm ngay 3 video vào kho).'});
         dropPendingWebhook_();
         return ContentService.createTextOutput('ok');

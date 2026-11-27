@@ -58,6 +58,7 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          TIKTOK_CREDENTIALS_JSON: ${{ secrets.TIKTOK_CREDENTIALS_JSON }}
         run: |
           if [ -n "${{ github.event.inputs.video_id }}" ]; then
             python src/publish.py --video-id "${{ github.event.inputs.video_id }}"
