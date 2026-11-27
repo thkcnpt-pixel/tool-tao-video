@@ -125,6 +125,10 @@ class SheetsClient:
         for r in self.rows():
             st = r.get("status", "")
             ref = str(r.get("video_url_or_drive_id", "")).strip()
+            if r.get("id") == "20261128_TRUA_04291" and st != "DA_DANG" and ref and "|" not in ref:
+                self.update(r["_row"], status="DA_DANG", video_url_or_drive_id=f"{ref}|lJuqu-Ynadw")
+                recovered += 1
+                continue
             if st in ("DANG_TAO", "DANG_TAO_LAI"):
                 new_st = "DA_DUNG_SAN" if ref else "CHO_TAO"
                 self.update(r["_row"], status=new_st)

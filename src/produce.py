@@ -151,6 +151,9 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
                 )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] Vault Auto-Publish OK ({yt_mode}): {yt_url}")
+                yt_id_now = yt_url.rsplit("/", 1)[-1] if yt_url else ""
+                if yt_id_now:
+                    sheets.update(r, video_url_or_drive_id=f"{vid}|{yt_id_now}", status="DA_DANG")
             except Exception as ex:
                 print(f"[youtube] CẢNH BÁO không auto-upload được YouTube ({ex!r})")
                 if "quota" in str(ex).lower():
@@ -283,6 +286,9 @@ def main():
                 )
                 yt_url, yt_mode = (yt_res if isinstance(yt_res, tuple) else (yt_res, "PUBLIC"))
                 print(f"[youtube] Auto-Publish OK ({yt_mode}): {yt_url}")
+                yt_id_now = yt_url.rsplit("/", 1)[-1] if yt_url else ""
+                if yt_id_now:
+                    sheets.update(r, video_url_or_drive_id=f"{vid}|{yt_id_now}", status="DA_DANG")
             except Exception as ex:
                 print(f"[youtube] CẢNH BÁO không auto-upload được YouTube ({ex!r})")
                 if "quota" in str(ex).lower():

@@ -36,45 +36,77 @@ class TelegramBot:
         ]]}
 
     def send_for_approval(self, video_path, row_id, topic, caption, drive_id="", youtube_url=None, youtube_mode="", fb_url=None, qa_note="", community_post=""):
-        esc_cap = str(caption).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        esc_top = str(topic).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        esc_qa = str(qa_note).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        esc = lambda s: str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        esc_cap = esc(str(caption or "")[:260])
+        esc_top = esc(str(topic or "")[:140])
+        esc_qa = esc(str(qa_note or "")[:120])
+        esc_comm = esc(str(community_post or "")[:240])
         fb_line = f"📘 <b>Facebook Reels:</b> {fb_url}\n" if fb_url else ""
         qa_line = f"🛡️ <b>AI QA:</b> {esc_qa}\n" if esc_qa else ""
+        drive_link = f"\n🔗 <a href=\"https://drive.google.com/file/d/{drive_id}/view\">Xem file gốc trên Drive</a>" if drive_id else ""
+
         if youtube_url or fb_url:
-            yt_line = f"▶️ <b>YouTube ({youtube_mode or 'PUBLIC'}):</b> {youtube_url}\n" if youtube_url else ""
-            text = (f"🚀 <b>ĐÃ TỰ ĐỘNG XUẤT BẢN ({row_id})</b>\n"
-                    f"📌 <b>Chủ đề:</b> {esc_top}\n"
-                    f"{yt_line}{fb_line}{qa_line}\n"
-                    f"📋 <b>Chạm 1 cái để Copy Caption TikTok:</b>\n"
-                    f"<pre>{esc_cap}</pre>"
-                    + (f"\n\n📝 <b>Chạm 1 cái để Copy Bài Đăng Zalo / Tab Cộng Đồng YT:</b>\n<pre>{str(community_post).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')}</pre>" if community_post else ""))
+            yt_line = f"▶️ <b>YouTube ({esc(youtube_mode or 'PUBLIC')}):</b> {youtube_url}\n" if youtube_url else ""
+            base_text = (
+                f"🚀 <b>ĐÃ TỰ ĐỘNG XUẤT BẢN ({esc(row_id)})</b>\n"
+                f"📌 <b>Chủ đề:</b> {esc_top}\n"
+                f"{yt_line}{fb_line}{qa_line}\n"
+                f"📋 <b>Chạm 1 cái để Copy Caption TikTok:</b>\n"
+                f"<pre>{esc_cap}</pre>"
+            )
+            comm_block = f"\n\n📝 <b>Copy Bài Đăng Zalo / Cộng Đồng YT:</b>\n<pre>{esc_comm}</pre>" if esc_comm else ""
+            if len(base_text) + len(comm_block) + len(drive_link) <= 1010:
+                text = base_text + comm_block + drive_link
+            else:
+                text = base_text + drive_link
         else:
-            text = (f"🎬 <b>Chờ duyệt:</b> <code>{row_id}</code>\n"
-                    f"📌 <b>Chủ đề:</b> {esc_top}\n{qa_line}\n"
-                    f"📋 <b>Chạm 1 cái để Copy Caption:</b>\n<pre>{esc_cap}</pre>\n\n"
-                    f"<i>💡 Reply tin nhắn này để sửa caption, hoặc bấm 🔄 Tạo lại để dựng kịch bản khác.</i>")
-        if drive_id:
-            text += f"\n🔗 <a href=\"https://drive.google.com/file/d/{drive_id}/view\">Xem file gốc trên Drive</a>"
+            text = (
+                f"🎬 <b>Chờ duyệt:</b> <code>{esc(row_id)}</code>\n"
+                f"📌 <b>Chủ đề:</b> {esc_top}\n{qa_line}\n"
+                f"📋 <b>Chạm 1 cái để Copy Caption:</b>\n<pre>{esc_cap}</pre>\n\n"
+                f"<i>💡 Reply tin nhắn này để sửa caption, hoặc bấm 🔄 Tạo lại để dựng kịch bản khác.</i>"
+                f"{drive_link}"
+            )
 
         thumb_path = os.path.splitext(video_path)[0] + ".jpg"
-        with ExitStack() as stack:
-            v_fh = stack.enter_context(open(video_path, "rb"))
-            files = {"video": (os.path.basename(video_path), v_fh, "video/mp4")}
-            if os.path.exists(thumb_path):
-                t_fh = stack.enter_context(open(thumb_path, "rb"))
-                files["thumbnail"] = ("thumb.jpg", t_fh, "image/jpeg")
-            msg = self._call(
-                "sendVideo",
-                data={
-                    "chat_id": self.chat_id,
-                    "caption": text[:1024],
-                    "parse_mode": "HTML",
-                    "supports_streaming": "true",
-                    "reply_markup": json.dumps(self.approval_keyboard(row_id, youtube_url=youtube_url)),
-                },
-                files=files,
-            )
+        kb = json.dumps(self.approval_keyboard(row_id, youtube_url=youtube_url))
+        try:
+            with ExitStack() as stack:
+                v_fh = stack.enter_context(open(video_path, "rb"))
+                files = {"video": (os.path.basename(video_path), v_fh, "video/mp4")}
+                if os.path.exists(thumb_path):
+                    t_fh = stack.enter_context(open(thumb_path, "rb"))
+                    files["thumbnail"] = ("thumb.jpg", t_fh, "image/jpeg")
+                msg = self._call(
+                    "sendVideo",
+                    data={
+                        "chat_id": self.chat_id,
+                        "caption": text,
+                        "parse_mode": "HTML",
+                        "supports_streaming": "true",
+                        "reply_markup": kb,
+                    },
+                    files=files,
+                )
+        except Exception as ex:
+            print(f"[telegram] HTML caption fallback sang plain text ({ex!r})")
+            plain = (
+                f"🚀 ĐÃ XUẤT BẢN ({row_id})\n"
+                f"📌 {topic}\n"
+                f"{'▶️ ' + str(youtube_url) + chr(10) if youtube_url else ''}"
+                f"📋 Caption:\n{str(caption)[:450]}"
+            )[:1000]
+            with open(video_path, "rb") as v_fh:
+                msg = self._call(
+                    "sendVideo",
+                    data={
+                        "chat_id": self.chat_id,
+                        "caption": plain,
+                        "supports_streaming": "true",
+                        "reply_markup": kb,
+                    },
+                    files={"video": (os.path.basename(video_path), v_fh, "video/mp4")},
+                )
         return str(msg["message_id"])
 
     def send_final(self, video_path, caption, youtube_url=None):
