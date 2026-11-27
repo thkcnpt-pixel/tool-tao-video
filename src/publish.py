@@ -20,8 +20,8 @@ def find_target_row(sheets, video_id=None):
     if video_id:
         for r in rows:
             if r["id"] == video_id:
-                if r["status"] != "DA_DUYET":
-                    print(f"[publish] BỎ QUA {video_id}: status hiện tại là {r['status']!r} (không phải DA_DUYET)")
+                if r["status"] not in ("DA_DUYET", "CHO_DUYET"):
+                    print(f"[publish] BỎ QUA {video_id}: status hiện tại là {r['status']!r}")
                     return None
                 return r
         return None

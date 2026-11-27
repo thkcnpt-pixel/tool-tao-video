@@ -591,8 +591,11 @@ Trả về JSON đúng định dạng:
     for model in MODELS[:5]:
         try:
             res, _ = _call_with_rotation(model, prompt, keys)
+            raw_items = res if isinstance(res, list) else res.get("items", [])
             out = []
-            for idx, it in enumerate(res.get("items", [])[:count]):
+            for idx, it in enumerate(raw_items[:count]):
+                if not isinstance(it, dict):
+                    continue
                 th = THEMES[(len(recent) + offset + idx) % len(THEMES)]
                 tp = str(it.get("topic", "")).strip()
                 if tp:

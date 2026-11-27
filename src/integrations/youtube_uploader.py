@@ -23,30 +23,68 @@ SLOT_SCHEDULE_VN = {
 }
 
 
-def _parse_client_secret():
+_RESOLVED_CLIENT = None
+
+
+def _candidate_clients():
+    pairs = []
     raw = os.environ.get("YOUTUBE_CLIENT_SECRET_JSON", "").strip()
-    if not raw:
-        raise RuntimeError("Thiếu YOUTUBE_CLIENT_SECRET_JSON")
     if raw.startswith("{"):
-        data = json.loads(raw)
-        box = data.get("installed") or data.get("web") or data
-        return box["client_id"], box["client_secret"]
-    raise RuntimeError("YOUTUBE_CLIENT_SECRET_JSON không phải JSON hợp lệ")
+        try:
+            data = json.loads(raw)
+            box = data.get("installed") or data.get("web") or data
+            if box.get("client_id") and box.get("client_secret"):
+                pairs.append((box["client_id"], box["client_secret"]))
+        except Exception:
+            pass
+    d_cid = os.environ.get("DRIVE_OAUTH_CLIENT_ID", "").strip()
+    d_sec = os.environ.get("DRIVE_OAUTH_CLIENT_SECRET", "").strip()
+    if d_cid and d_sec and (d_cid, d_sec) not in pairs:
+        pairs.append((d_cid, d_sec))
+    if not pairs:
+        raise RuntimeError("Thiếu YOUTUBE_CLIENT_SECRET_JSON / DRIVE_OAUTH_CLIENT_ID")
+    return pairs
 
 
-def get_youtube_service(scopes=None):
+def _build_credentials(scopes=None):
+    global _RESOLVED_CLIENT
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+
     rt = os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip()
     if not rt:
         raise RuntimeError("Thiếu YOUTUBE_REFRESH_TOKEN")
-    cid, csec = _parse_client_secret()
-    creds = Credentials(
-        token=None,
-        refresh_token=rt,
-        client_id=cid,
-        client_secret=csec,
-        token_uri="https://oauth2.googleapis.com/token",
-        scopes=scopes or YT_SCOPES,
-    )
+
+    candidates = [_RESOLVED_CLIENT] if _RESOLVED_CLIENT else _candidate_clients()
+    last_err = None
+    for cid, csec in candidates:
+        try:
+            creds = Credentials(
+                token=None,
+                refresh_token=rt,
+                client_id=cid,
+                client_secret=csec,
+                token_uri="https://oauth2.googleapis.com/token",
+                scopes=scopes or YT_SCOPES,
+            )
+            creds.refresh(GoogleAuthRequest())
+            _RESOLVED_CLIENT = (cid, csec)
+            return creds
+        except Exception as ex:
+            last_err = ex
+            if "unauthorized_client" in str(ex) or "invalid_client" in str(ex):
+                continue
+            raise
+    raise last_err
+
+
+def _parse_client_secret():
+    if _RESOLVED_CLIENT:
+        return _RESOLVED_CLIENT
+    return _candidate_clients()[0]
+
+
+def get_youtube_service(scopes=None):
+    creds = _build_credentials(scopes=scopes or YT_SCOPES)
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
@@ -118,14 +156,7 @@ def fetch_retention_analytics(video_ids):
     try:
         yta = build(
             "youtubeAnalytics", "v2",
-            credentials=Credentials(
-                token=None,
-                refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip(),
-                client_id=_parse_client_secret()[0],
-                client_secret=_parse_client_secret()[1],
-                token_uri="https://oauth2.googleapis.com/token",
-                scopes=["https://www.googleapis.com/auth/yt-analytics.readonly"],
-            ),
+            credentials=_build_credentials(["https://www.googleapis.com/auth/yt-analytics.readonly"]),
             cache_discovery=False,
         )
         today = datetime.datetime.now(VN).date()
