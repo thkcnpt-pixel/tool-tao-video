@@ -338,3 +338,64 @@ html, body { width: var(--W); height: var(--H); background: transparent; overflo
 #root.style-editorial_light .app-mock-body .good-tag { background: #d1fae5; color: #047857; }
 #root.style-editorial_light .app-status { color: #047857; background: #d1fae5; }
 #root.style-neo_brutal .app-mock { border-radius: 12px; border-width: 3px; box-shadow: 7px 7px 0 var(--accent); }
+
+/* ====== QUIZ POLL (BÌNH CHỌN A / B KÍCH THÍCH BÌNH LUẬN GẤP 3X) ====== */
+.poll-opt {
+  position: relative; overflow: hidden; border-radius: 28px; padding: 24px 28px;
+  background: var(--glass); border: 2.5px solid var(--glass-line);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.poll-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.34), rgba(56, 189, 248, 0.22));
+  pointer-events: none;
+}
+.poll-opt.lose .poll-fill { background: rgba(244, 63, 94, 0.20); }
+.poll-opt.win { border-color: #34d399; box-shadow: 0 0 36px rgba(52, 211, 153, 0.40); }
+.poll-left { position: relative; display: flex; align-items: center; gap: 18px; z-index: 1; }
+.poll-key {
+  flex: 0 0 60px; height: 60px; border-radius: 18px; display: flex; align-items: center; justify-content: center;
+  font-size: 32px; font-weight: 800; background: rgba(255,255,255,0.14); color: #fff;
+}
+.poll-opt.win .poll-key { background: #34d399; color: #030b18; }
+.poll-txt { font-size: 33px; font-weight: 700; line-height: 1.28; }
+.poll-pct { position: relative; z-index: 1; font-size: 34px; font-weight: 800; color: var(--pop); opacity: 0; }
+.poll-hint {
+  padding: 16px 24px; border-radius: 999px; width: max-content; max-width: 780px;
+  background: rgba(250, 204, 21, 0.16); border: 2px solid var(--pop);
+  font-size: 28px; font-weight: 800; color: var(--pop);
+}
+#root.style-editorial_light .poll-opt { background: #ffffff; color: #0f172a; border-color: rgba(15,23,42,0.18); }
+#root.style-editorial_light .poll-key { background: #e2e8f0; color: #0f172a; }
+#root.style-editorial_light .poll-opt.win { border-color: #059669; background: #ecfdf5; }
+#root.style-editorial_light .poll-pct { color: #047857; }
+#root.style-editorial_light .poll-hint { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+
+/* ====== BEFORE vs AFTER (TRƯỚC / SAU TRỰC QUAN) ====== */
+.ba-before {
+  padding: 24px 28px; border-radius: 30px; background: rgba(48, 10, 24, 0.86);
+  border: 2.5px solid #fb7185;
+}
+.ba-before .label { color: #fda4af; }
+.ba-badge {
+  align-self: center; padding: 12px 28px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--pop), var(--accent)); color: #030b18;
+  font-size: 28px; font-weight: 800; box-shadow: 0 8px 26px rgba(0,0,0,0.45);
+}
+.ba-after {
+  padding: 26px 30px; border-radius: 30px; background: rgba(4, 38, 32, 0.92);
+  border: 2.5px solid #34d399; box-shadow: 0 0 38px rgba(52, 211, 153, 0.35);
+}
+.ba-after .label { color: #6ee7b7; }
+#root.style-editorial_light .ba-before { background: #fff1f2; color: #881337; }
+#root.style-editorial_light .ba-before .label { color: #e11d48; }
+#root.style-editorial_light .ba-after { background: #ecfdf5; color: #064e3b; }
+#root.style-editorial_light .ba-after .label { color: #059669; }
+
+/* ====== NÚT NHẮC THẢ TIM GIỮA VIDEO (TĂNG TỶ LỆ LIKE 2-3X) ====== */
+#like-nudge {
+  position: absolute; left: var(--pad-left); top: 1328px; padding: 12px 24px; border-radius: 999px;
+  background: rgba(244, 63, 94, 0.92); color: #ffffff; border: 2px solid rgba(255,255,255,0.45);
+  font-size: 26px; font-weight: 800; box-shadow: 0 10px 28px rgba(244, 63, 94, 0.45);
+  opacity: 0; pointer-events: none; will-change: opacity, transform;
+}

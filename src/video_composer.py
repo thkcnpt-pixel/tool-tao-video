@@ -72,10 +72,16 @@ def _make_sfx_track(timeline, workdir):
                 note = triad_notes[idx % len(triad_notes)]
                 _add_tone(buf, pop_sec, 0.14, note, note * 1.25, vol=0.14, attack=0.003, decay=24.0, harmonic=0.4)
 
-        elif stype == "myth_vs_fact":
-            # Tiếng Buzz trầm nhẹ ở thẻ Sai lầm ❌ (0.08) + Tiếng Ding xanh sáng ở thẻ Cách làm đúng ✅ (0.48)
+        elif stype in ("myth_vs_fact", "before_after"):
+            # Tiếng Buzz trầm nhẹ ở thẻ Trước/Sai ❌ + Tiếng Ding xanh sáng ở thẻ Sau/Đúng ✅
             _add_tone(buf, st + dur * 0.08, 0.15, 240.0, 180.0, vol=0.12, attack=0.005, decay=18.0, harmonic=0.6)
-            _add_tone(buf, st + dur * 0.48, 0.20, 783.99, 1174.66, vol=0.16, attack=0.004, decay=18.0, harmonic=0.45)
+            _add_tone(buf, st + dur * 0.46, 0.20, 783.99, 1174.66, vol=0.16, attack=0.004, decay=18.0, harmonic=0.45)
+
+        elif stype == "quiz_poll":
+            # 3 nhịp đồng hồ đếm ngược kích thích não bộ đoán A/B + tiếng Chuông mở đáp án ở 48%
+            for k in range(3):
+                _add_tone(buf, st + dur * (0.14 + k * 0.10), 0.04, 880.0, 880.0, vol=0.11, attack=0.002, decay=55.0)
+            _add_tone(buf, st + dur * 0.48, 0.24, 987.77, 1479.98, vol=0.17, attack=0.004, decay=15.0, harmonic=0.5)
 
         elif stype in ("stat_card", "cta"):
             # Tiếng Digital Counter Ticks khi số nhảy (0.10s -> 0.65s) + Tiếng Reward Ding khi chốt số (0.68s)

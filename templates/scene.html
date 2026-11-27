@@ -11,6 +11,7 @@
   <div id="seg-idx"></div>
   <div id="stage"></div>
   <div id="flash"></div>
+  <div id="like-nudge">❤️ Hữu ích? Chạm đúp 2 lần lưu mẹo này!</div>
   <div id="sub"></div>
   <div id="watermark">Thiện AI Thực Chiến • @thiennguyen.ai</div>
   <svg id="laser-svg" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
@@ -189,6 +190,21 @@ function build(seg, idx) {
       seg.st.push({ el: e, start, end: start + 0.8 / n });
       wp.push({ frac: start, get: () => e, expr: 'curious' });
     });
+  } else if (seg.type === 'quiz_poll') {
+    add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
+    const aOpt = add($(`<div class="poll-opt"><div class="poll-fill"></div><div class="poll-left"><div class="poll-key">A</div><div class="poll-txt">${esc(d.option_a)}</div></div><div class="poll-pct"></div></div>`), 0.06);
+    const bOpt = add($(`<div class="poll-opt"><div class="poll-fill"></div><div class="poll-left"><div class="poll-key">B</div><div class="poll-txt">${esc(d.option_b)}</div></div><div class="poll-pct"></div></div>`), 0.14);
+    const hint = add($(`<div class="poll-hint">👇 Gõ nhanh A hoặc B dưới Bình luận!</div>`), 0.22);
+    const winIsA = String(d.winner || 'B').toUpperCase() === 'A';
+    const winPct = parseInt(String(d.vote_split || '84'), 10) || 84;
+    seg.poll = { aOpt, bOpt, hint, winIsA, winPct, losePct: Math.max(5, 100 - winPct) };
+    wp.push({ frac: 0.10, get: () => aOpt, expr: 'curious' }, { frac: 0.50, get: () => (winIsA ? aOpt : bOpt), expr: 'excited' });
+  } else if (seg.type === 'before_after') {
+    add($(`<div class="title">${esc(d.title)}</div>`), 0.02);
+    const bef = add($(`<div class="ba-before"><div class="label">❌ Trước khi áp dụng</div><div class="text">${esc(d.before_text)}</div></div>`), 0.06);
+    const bdg = add($(`<div class="ba-badge">⚡ ${esc(d.speedup || '10X NHANH HƠN')}</div>`), 0.36);
+    const aft = add($(`<div class="ba-after"><div class="label">✅ Sau 15 giây dùng AI</div><div class="text">${esc(d.after_text)}</div></div>`), 0.44);
+    wp.push({ frac: 0.08, get: () => bef, expr: 'amazed' }, { frac: 0.46, get: () => aft, expr: 'excited' });
   } else if (seg.type === 'cta') {
     const m = add($(`<div class="metric-wrap glass"><div class="metric">${esc(d.highlight_metric)}</div><div class="text">${esc(d.summary)}</div></div>`), 0.05);
     seg.metricEl = m.querySelector('.metric'); seg.metricRaw = d.highlight_metric;
@@ -227,7 +243,6 @@ function init(tl) {
 function robotAt(t) {
   const first = wps[0] || { x: 700, y: 500, tx: 650, ty: 550, expr: 'amazed' };
   const last = wps[wps.length - 1] || first;
-  // Trong 0.32s cuối cùng của video: Robot bay mượt từ vị trí cuối (CTA) về đúng vị trí đầu tiên (Hook) để khép kín vòng lặp!
   if (T && T.total && t >= T.total - 0.32) {
     const uLoop = easeOut(clamp((t - (T.total - 0.32)) / 0.32));
     const lx = last.x + (first.x - last.x) * uLoop;
@@ -259,8 +274,8 @@ function seek(t) {
   segEls.forEach((e, i) => {
     if (loopTail > 0 && i === 0) {
       e.style.opacity = easeOut(loopTail);
-      e.style.transform = `scale(${1 + 0.12 * (1 - easeOut(loopTail))})`;
-      T.segments[0].R.forEach(([n, at]) => { n.style.opacity = at === 0 ? 1 : 0; n.style.transform = 'none'; });
+      e.style.transform = `scale(${1 + 0.08 * (1 - easeOut(loopTail))})`;
+      T.segments[0].R.forEach(([n]) => { n.style.opacity = 1; n.style.transform = 'none'; });
       return;
     }
     if (i !== si) { e.style.opacity = 0; return; }
@@ -271,10 +286,17 @@ function seek(t) {
     const fadeIn = i === 0 ? 1 : lt / 0.16;
     const fadeOut = i === T.segments.length - 1 ? 1 : (s.dur - lt) / 0.15;
     e.style.opacity = clamp(Math.min(fadeIn, fadeOut));
-    const hookZoom = (i === 0 && lt < 0.32) ? (1 + 0.12 * (1 - easeOut(lt / 0.32))) : 1;
+    const hookZoom = (i === 0 && lt < 0.28) ? (1 + 0.08 * (1 - easeOut(lt / 0.28))) : 1;
     e.style.transform = hookZoom !== 1 ? `scale(${hookZoom})` : 'none';
   });
   s.R.forEach(([n, at]) => {
+    // Cảnh Hook (si === 0): hiển thị rõ chữ 100% ngay từ Frame 0:00 để tăng tỷ lệ dừng lướt & ảnh bìa tự động sắc nét!
+    if (si === 0) {
+      const rv0 = easeOut(rise(p, at * 0.4, 0.08));
+      n.style.opacity = 1;
+      n.style.transform = `translateY(${(1 - rv0) * 10}px) scale(${0.97 + 0.03 * rv0})`;
+      return;
+    }
     const rv = easeOut(rise(p, at, 0.09));
     n.style.opacity = rv;
     n.style.transform = `translateY(${(1 - rv) * 24}px) scale(${0.96 + 0.04 * rv})`;
@@ -285,11 +307,39 @@ function seek(t) {
     s.typed.textContent = full.slice(0, Math.round(full.length * k));
     s.caret.style.opacity = k < 1 ? 1 : 0;
   }
+  if (s.poll) {
+    const rev = easeOut(clamp((p - 0.48) / 0.20));
+    const { aOpt, bOpt, hint, winIsA, winPct, losePct } = s.poll;
+    const aPct = winIsA ? winPct : losePct, bPct = winIsA ? losePct : winPct;
+    aOpt.classList.toggle('win', rev > 0.05 && winIsA);
+    aOpt.classList.toggle('lose', rev > 0.05 && !winIsA);
+    bOpt.classList.toggle('win', rev > 0.05 && !winIsA);
+    bOpt.classList.toggle('lose', rev > 0.05 && winIsA);
+    aOpt.querySelector('.poll-fill').style.width = `${Math.round(aPct * rev)}%`;
+    bOpt.querySelector('.poll-fill').style.width = `${Math.round(bPct * rev)}%`;
+    const aLbl = aOpt.querySelector('.poll-pct'), bLbl = bOpt.querySelector('.poll-pct');
+    aLbl.textContent = `${Math.round(aPct * rev)}%${winIsA ? ' ✓' : ''}`;
+    bLbl.textContent = `${Math.round(bPct * rev)}%${!winIsA ? ' ✓' : ''}`;
+    aLbl.style.opacity = rev; bLbl.style.opacity = rev;
+    if (rev > 0.3) hint.textContent = `✨ Đáp án chuẩn: Phương án ${winIsA ? 'A' : 'B'} — bạn đoán đúng chứ?`;
+    else hint.textContent = '👇 Gõ nhanh A hoặc B dưới Bình luận!';
+  }
   if (s.rows) s.rows.forEach(r => r.el.classList.toggle('active', p >= r.start && p < r.end));
   if (s.st) s.st.forEach(r => r.el.classList.toggle('active', p >= r.start && p < r.end));
   if (s.bl) s.bl.forEach(r => r.el.classList.toggle('active', p >= r.start));
   if (s.chk) s.chk.forEach(c => c.el.classList.toggle('done', p >= c.start));
   if (s.rk) s.rk.forEach(k => k.el.classList.toggle('active', k.isTop1 ? p >= k.start : (p >= k.start && p < k.end)));
+
+  // Nút nhắc thả tim xuất hiện mượt trong 2.3s ở khoảng 56% thời lượng video
+  const nudge = document.getElementById('like-nudge');
+  const nStart = (T.total || 20) * 0.56, nEnd = nStart + 2.3;
+  if (t >= nStart && t <= nEnd) {
+    const nu = t < nStart + 0.3 ? (t - nStart) / 0.3 : (t > nEnd - 0.3 ? (nEnd - t) / 0.3 : 1);
+    nudge.style.opacity = clamp(nu).toFixed(3);
+    nudge.style.transform = `translateY(${(1 - easeOut(clamp(nu))) * 14}px)`;
+  } else {
+    nudge.style.opacity = 0;
+  }
 
   // Phụ đề Karaoke + Emoji tự động ở từ đang đọc + Camera Punch-in theo từ khóa
   const sub = document.getElementById('sub');

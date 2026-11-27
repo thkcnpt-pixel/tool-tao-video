@@ -50,12 +50,23 @@ def _clean_voice_text(text, is_loop_tail=False):
     return joined if is_loop_tail else (joined + ".")
 
 
+_GEMINI_TTS_COOLDOWN = {}
+_GEMINI_RR_IDX = 0
+
+
 def _get_gemini_keys():
+    global _GEMINI_RR_IDX
+    now = time.time()
     keys = []
     for name in ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"):
         val = os.environ.get(name, "").strip()
         if val and val not in keys and val not in _GEMINI_TTS_DEAD_KEYS:
-            keys.append(val)
+            if _GEMINI_TTS_COOLDOWN.get(val, 0) <= now:
+                keys.append(val)
+    if len(keys) > 1:
+        shift = _GEMINI_RR_IDX % len(keys)
+        _GEMINI_RR_IDX += 1
+        keys = keys[shift:] + keys[:shift]
     return keys
 
 
@@ -69,7 +80,6 @@ def _pick_gemini_voice(voice_hint, seed_text=""):
 def _rate_to_tempo(rate_str, for_gemini=True):
     m = re.search(r"([+-]?\d+)", str(rate_str or ""))
     pct = int(m.group(1)) if m else 12
-    # Gemini TTS đã có tốc độ tự nhiên nhanh gọn sẵn nên chỉ tăng nhẹ ~55% mức pct của Edge-TTS
     scale = 0.55 if for_gemini else 1.0
     return max(0.95, min(1.25, 1.0 + (pct * scale) / 100.0))
 
@@ -126,8 +136,11 @@ def _gemini_tts_once(text, gemini_voice, rate, out_path, is_loop_tail=False):
             )
             if r.status_code != 200:
                 msg = f"HTTP {r.status_code}: {r.text[:160]}"
-                if r.status_code in (403, 429) or "RESOURCE_EXHAUSTED" in r.text or "quota" in r.text.lower():
+                if r.status_code == 403 or "PerDay" in r.text or "Day" in r.text:
                     _GEMINI_TTS_DEAD_KEYS.add(k)
+                elif r.status_code == 429 or "RESOURCE_EXHAUSTED" in r.text:
+                    # Tạm nghỉ key này 22 giây (giới hạn 3 RPM mỗi phút), không khóa vĩnh viễn cả phiên!
+                    _GEMINI_TTS_COOLDOWN[k] = time.time() + 22.0
                 raise RuntimeError(msg)
             data = r.json()
             part = data["candidates"][0]["content"]["parts"][0]

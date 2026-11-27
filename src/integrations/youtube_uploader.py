@@ -299,8 +299,12 @@ def format_prompt_comment(full_prompt="", pinned_question=""):
     return f"💬 {q_line}\n👉 Comment ý kiến của bạn, mình trả lời từng bình luận nhé!"
 
 
-def backfill_scheduled_comments(rows, check_latest=6):
-    """Tự động đăng bù Bình luận đầu tiên (chứa Full Prompt) cho các video Scheduled Public ngay sau khi đến giờ lên sóng Công khai."""
+def backfill_scheduled_comments(rows, check_latest=8):
+    """Tối ưu hậu xuất bản 3-trong-1 trên 8 video gần nhất (chỉ tốn 1 điểm quota đọc):
+    1. Thả bù Bình luận đầu tiên (chứa Full Prompt) ngay khi video Scheduled chuyển sang Public.
+    2. Tự động trả lời bình luận của khán giả thật bằng AI -> nhân đôi số comment & kéo khán giả quay lại xem lần 2 qua thông báo đẩy.
+    3. Tự động đổi sang Tiêu đề dự phòng A/B (`youtube_title_alt`) nếu sau 12-48h video vẫn dưới 180 view để kích đợt đề xuất mới.
+    """
     candidates = []
     for r in reversed(rows):
         if r.get("status") != "DA_DANG":
@@ -313,27 +317,100 @@ def backfill_scheduled_comments(rows, check_latest=6):
     if not candidates:
         return 0
     try:
-        yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.readonly"])
+        yt_ro = get_youtube_service(["https://www.googleapis.com/auth/youtube.readonly"])
         vids = [c[0] for c in candidates]
-        res = yt.videos().list(part="status,statistics", id=",".join(vids)).execute()
+        res = yt_ro.videos().list(part="snippet,status,statistics", id=",".join(vids)).execute()
         info = {it["id"]: it for it in res.get("items", [])}
     except Exception:
         return 0
 
-    posted = 0
+    yt_rw = None
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    posted, replied, ab_swapped = 0, 0, 0
+
     for vid, row in candidates:
         it = info.get(vid)
         if not it:
             continue
+        snip = it.get("snippet", {})
         priv = it.get("status", {}).get("privacyStatus")
-        cmts = int(it.get("statistics", {}).get("commentCount", 0))
-        if priv == "public" and cmts == 0:
-            sc_obj = {}
-            try:
-                sc_obj = json.loads(row.get("script_json") or "{}")
-            except Exception:
-                pass
+        if priv != "public":
+            continue
+
+        stats = it.get("statistics", {})
+        cmts = int(stats.get("commentCount", 0))
+        views = int(stats.get("viewCount", 0))
+        my_channel_id = snip.get("channelId", "")
+
+        sc_obj = {}
+        try:
+            sc_obj = json.loads(row.get("script_json") or "{}")
+        except Exception:
+            pass
+
+        # 1) Thả bù Bình luận đầu tiên chứa Full Prompt nếu chưa có comment nào
+        if cmts == 0:
             cmt = format_prompt_comment(sc_obj.get("full_prompt", ""), sc_obj.get("pinned_question", ""))
             if post_top_comment(vid, cmt):
                 posted += 1
-    return posted
+            continue
+
+        # 2) Tự động trả lời bình luận của khán giả thật (tối đa 3 lượt trả lời/đợt chạy)
+        if replied < 3 and cmts >= 1:
+            try:
+                th_res = yt_ro.commentThreads().list(
+                    part="snippet", videoId=vid, maxResults=8, textFormat="plainText"
+                ).execute()
+                for th in th_res.get("items", []):
+                    if replied >= 3:
+                        break
+                    th_snip = th.get("snippet", {})
+                    if int(th_snip.get("totalReplyCount", 0)) > 0 or not th_snip.get("canReply", True):
+                        continue
+                    top_c = th_snip.get("topLevelComment", {}).get("snippet", {})
+                    author_ch = top_c.get("authorChannelId", {}).get("value", "")
+                    txt = str(top_c.get("textDisplay") or "").strip()
+                    if not txt or (my_channel_id and author_ch == my_channel_id):
+                        continue
+                    if "MẪU CÂU LỆNH ĐẦY ĐỦ" in txt:
+                        continue
+                    from gemini_client import generate_comment_reply
+                    reply_txt = generate_comment_reply(row.get("topic", ""), txt)
+                    if yt_rw is None:
+                        yt_rw = get_youtube_service(["https://www.googleapis.com/auth/youtube.force-ssl"])
+                    yt_rw.comments().insert(
+                        part="snippet",
+                        body={"snippet": {"parentId": th["id"], "textOriginal": reply_txt}},
+                    ).execute()
+                    replied += 1
+                    print(f"[youtube] đã tự động trả lời khán giả trên video {vid}: {reply_txt!r}")
+            except Exception as ex:
+                print(f"[youtube] bỏ qua auto-reply trên {vid} ({ex!r})")
+
+        # 3) Tự động A/B Test đổi tiêu đề mới nếu sau 12-48h video vẫn dưới 180 view (tối đa 1 video/đợt)
+        alt_title = str(sc_obj.get("youtube_title_alt") or "").strip()
+        pub_str = snip.get("publishedAt", "")
+        if ab_swapped < 1 and alt_title and views < 180 and pub_str:
+            try:
+                pub_dt = datetime.datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                age_hours = (now_utc - pub_dt).total_seconds() / 3600.0
+                cur_title = str(snip.get("title") or "").strip()
+                if 12.0 <= age_hours <= 48.0 and cur_title != alt_title[:95]:
+                    if yt_rw is None:
+                        yt_rw = get_youtube_service(["https://www.googleapis.com/auth/youtube.force-ssl"])
+                    upd_snip = {
+                        "title": alt_title[:95],
+                        "description": snip.get("description", ""),
+                        "categoryId": snip.get("categoryId", "28"),
+                        "defaultLanguage": snip.get("defaultLanguage", "vi"),
+                        "defaultAudioLanguage": snip.get("defaultAudioLanguage", "vi"),
+                    }
+                    if snip.get("tags"):
+                        upd_snip["tags"] = snip["tags"]
+                    yt_rw.videos().update(part="snippet", body={"id": vid, "snippet": upd_snip}).execute()
+                    ab_swapped += 1
+                    print(f"[youtube] A/B Title Swap ({views} views sau {age_hours:.1f}h) trên {vid} -> {alt_title[:95]!r}")
+            except Exception as ex:
+                print(f"[youtube] bỏ qua A/B title trên {vid} ({ex!r})")
+
+    return posted + replied + ab_swapped

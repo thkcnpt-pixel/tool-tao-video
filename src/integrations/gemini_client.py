@@ -59,13 +59,14 @@ def sanitize_tiktok_text(text):
 SCENE_TYPES = {
     "chat_demo", "comparison", "stat_card", "bullet_steps",
     "prompt_card", "myth_vs_fact", "checklist_card", "ranking_card",
+    "quiz_poll", "before_after",
 }
 
 SLOT_HINT = {
-    "SANG": "Ca sáng: tin tức AI/công nghệ nhanh. Ưu tiên stat_card, ranking_card hoặc myth_vs_fact.",
-    "TRUA": "Ca trưa: so sánh tính năng/chia sẻ giá trị, tối ưu chi phí thông minh. Ưu tiên comparison, chat_demo hoặc checklist_card.",
-    "CHIEU": "Ca chiều tan tầm: giải cứu việc văn phòng cuối ngày (Excel, PDF, Báo cáo, Email nhanh). Ưu tiên bullet_steps, prompt_card hoặc myth_vs_fact.",
-    "TOI": "Ca tối: câu lệnh Prompt thực chiến / quy trình tự động hóa sâu. Ưu tiên prompt_card, bullet_steps hoặc checklist_card.",
+    "SANG": "Ca sáng: tin tức AI/công nghệ nhanh. Ưu tiên quiz_poll, stat_card hoặc ranking_card.",
+    "TRUA": "Ca trưa: so sánh tính năng/chia sẻ giá trị, tối ưu chi phí thông minh. Ưu tiên quiz_poll, before_after hoặc comparison.",
+    "CHIEU": "Ca chiều tan tầm: giải cứu việc văn phòng cuối ngày (Excel, PDF, Báo cáo, Email nhanh). Ưu tiên before_after, bullet_steps hoặc prompt_card.",
+    "TOI": "Ca tối: câu lệnh Prompt thực chiến / quy trình tự động hóa sâu. Ưu tiên prompt_card, quiz_poll hoặc bullet_steps.",
 }
 
 SLOT_VOICE = {
@@ -81,7 +82,7 @@ HOOK_ARCHETYPES = [
     "CÔNG THỨC HOOK 1 (Cảnh báo sai lầm): Mở đầu bằng 'Đừng...' hoặc chỉ ra sai lầm 90% người dùng đang mắc phải khiến mất thời gian.",
     "CÔNG THỨC HOOK 2 (Con số & Tốc độ gây sốc): Mở đầu bằng con số đối lập mạnh (VD: '100 trang trong 10 giây', '3 tiếng còn 5 phút').",
     "CÔNG THỨC HOOK 3 (Bí mật thực chiến): Mở đầu kích thích tò mò ('Ít ai biết tính năng ẩn này...', 'Câu lệnh giúp mình tiết kiệm 2 giờ mỗi ngày').",
-    "CÔNG THỨC HOOK 4 (Câu hỏi trực diện): Mở đầu chạm đúng nỗi đau công việc ('Còn làm thủ công việc này?', 'Khi nào nên nâng cấp AI?').",
+    "CÔNG THỨC HOOK 4 (Thử thách chọn A/B): Mở đầu thách đố người xem chọn nhanh ('Nếu gặp file 500 dòng, bạn chọn cách A hay B?').",
 ]
 
 SLOT_CTA_BUTTON = {
@@ -118,12 +119,17 @@ RSS_URLS = [
 SCHEMA_EXAMPLE = {
     "badge": "GIẢI CỨU EXCEL #12",
     "youtube_title": "Sửa lỗi file Excel 1.000 dòng chỉ trong 15 giây bằng AI",
+    "youtube_title_alt": "Đừng dò tay nữa! Câu lệnh AI bắt sạch lỗi Excel trong 15 giây",
     "bg_theme": "cyber_blue",
     "mascot": True,
     "voice": "vi-VN-HoaiMyNeural",
     "voice_rate": "+12%",
     "hook": {"headline": ["Dòng 1", "Dòng 2", "Dòng nhấn mạnh!"], "voiceover": "..."},
     "scenes": [
+        {"type": "quiz_poll", "title": "Bạn đang dùng cách nào?", "option_a": "Hỏi AI câu ngắn 5 chữ",
+         "option_b": "Giao vai trò + bảng mẫu", "winner": "B", "vote_split": "84%", "voiceover": "..."},
+        {"type": "before_after", "title": "Khác biệt sau 1 câu lệnh", "before_text": "Lọc tay 2 tiếng dễ nhầm số",
+         "after_text": "15 giây xuất bảng chuẩn 100%", "speedup": "10X NHANH HƠN", "voiceover": "..."},
         {"type": "chat_demo", "title": "...", "user_prompt": "...", "ai_reply": "...", "voiceover": "..."},
         {"type": "prompt_card", "title": "Câu lệnh mẫu thực chiến", "prompt_text": "Hãy đóng vai chuyên gia...",
          "result_note": "Rút ngắn 80% thời gian", "voiceover": "..."},
@@ -141,7 +147,7 @@ SCHEMA_EXAMPLE = {
     "cta": {"highlight_metric": "70%", "summary": "Mẫu câu lệnh đầy đủ để sẵn dưới bình luận", "button_text": "📋 Copy trọn bộ Prompt dưới Bình luận", "voiceover": "..."},
     "caption": "Mô tả ngắn 1-2 câu súc tích #meoai #aithucchien #congnghe #shorts",
     "full_prompt": "Hãy đóng vai chuyên gia [lĩnh vực], phân tích [dữ liệu/tài liệu đính kèm], chỉ ra 3 vấn đề quan trọng nhất và xuất kết quả thành bảng gồm: Nguyên nhân, Cách khắc phục, Công thức chuẩn.",
-    "pinned_question": "Bạn đang tốn nhiều thời gian nhất cho việc lặp lại nào mỗi ngày? Comment để mình làm tiếp phần sau nhé!",
+    "pinned_question": "Bạn chọn Cách A hay Cách B? Gõ nhanh 1 chữ dưới bình luận nhé!",
 }
 
 
@@ -186,11 +192,14 @@ Yêu cầu:
 - Chỉ trả về MỘT đối tượng JSON hợp lệ, đúng cấu trúc mẫu dưới đây, không markdown.
 - Tiếng Việt có dấu, tự nhiên, tuyệt đối không dùng từ mua bán lộ liễu, không đọc số điện thoại/Zalo.
 - badge: đặt đúng theo format Series có đánh số là "{series_badge}" (giúp người xem theo dõi trọn bộ Series trên kênh).
-- youtube_title: tiêu đề tối ưu CTR & tìm kiếm tiếng Việt (35-58 ký tự), có con số hoặc kết quả cụ thể gây tò mò, KHÔNG chứa dấu # hay hashtag.
+- youtube_title: tiêu đề số 1 tối ưu CTR & tìm kiếm tiếng Việt (35-58 ký tự), có con số/kết quả cụ thể, KHÔNG chứa dấu #.
+- youtube_title_alt: tiêu đề dự phòng A/B Testing (35-58 ký tự) viết theo góc đánh vào SAI LẦM hoặc CÂU HỎI TÒ MÒ khác hẳn youtube_title, KHÔNG chứa dấu #.
 - HOOK 2 GIÂY ĐẦU: hook.voiceover tối đa 12 từ, đánh thẳng vào kết quả/nỗi đau cụ thể (con số, thời gian), không chào hỏi.
 - Mỗi cảnh CHỮ TRÊN MÀN HÌNH CỰC NGẮN (ưu tiên 3-6 từ/mục) để đọc được ngay trên điện thoại; chi tiết đưa vào voiceover.
 - hook.headline: đúng 3 dòng, mỗi dòng tối đa 18 ký tự; dòng cuối là dòng nhấn mạnh. Áp dụng phong cách: {HOOK_ARCHETYPES[seed_idx % len(HOOK_ARCHETYPES)]}
-- scenes: chọn {scene_range} cảnh phù hợp nhất trong 8 loại: chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần).
+- scenes: chọn {scene_range} cảnh phù hợp nhất trong 10 loại: quiz_poll, before_after, chat_demo, prompt_card, myth_vs_fact, checklist_card, ranking_card, comparison, stat_card, bullet_steps (mỗi loại tối đa 1 lần; KHUYẾN KHÍCH có ít nhất 1 cảnh tương tác `quiz_poll` hoặc `before_after` để kích thích người xem bình luận A/B).
+- quiz_poll: option_a và option_b mỗi mục tối đa 32 ký tự; winner là "A" hoặc "B"; vote_split dạng "82%". Trong voiceover cảnh quiz_poll, mời nhanh người xem đoán A hay B.
+- before_after: before_text và after_text mỗi mục tối đa 36 ký tự; speedup tối đa 18 ký tự (VD: "10X NHANH HƠN").
 - checklist_card: items gồm 3 mục ngắn (mỗi mục tối đa 30 ký tự).
 - ranking_card: ranks gồm đúng 3 mục xếp theo thứ tự từ Hạng 3 -> Hạng 2 -> Hạng 1 (mỗi mục tối đa 30 ký tự).
 - prompt_card: prompt_text là câu lệnh tóm tắt 10-18 từ dễ đọc trên màn hình; result_note tối đa 40 ký tự.
@@ -199,7 +208,7 @@ Yêu cầu:
 - stat_card & cta: metric / highlight_metric bắt đầu bằng con số (vd 10X, 70%, 3X, 85%).
 - cta.button_text: đặt đúng là "{cta_btn}". Trong `cta.voiceover`, khéo léo nhắc người xem lấy câu lệnh đầy đủ dưới phần bình luận trước khi nối sang cụm cầu nối vòng lặp.
 - full_prompt: trọn bộ câu lệnh Prompt mẫu ĐẦY ĐỦ, CHI TIẾT (30-60 từ, có ngoặc vuông [như thế này] ở chỗ người dùng tự thay thông tin) để hệ thống tự động ghim vào Bình luận đầu tiên trên YouTube cho khán giả copy dùng ngay!
-- pinned_question: 1 câu hỏi mở ngắn gọn kích thích tranh luận dưới bình luận.
+- pinned_question: 1 câu hỏi cực dễ trả lời bằng 1 từ hoặc chọn A/B dưới bình luận (kích thích tăng vọt số comment).
 - Mỗi voiceover 10-20 từ (tổng toàn video 45-95 từ).
 - KỸ THUẬT CÂU GHÉP VÒNG LẶP (SPLIT-SENTENCE SEAMLESS LOOP — BẮT BUỘC):
   + Câu cuối của `cta.voiceover` và câu đầu của `hook.voiceover` PHẢI LÀ 2 NỬA CỦA CÙNG MỘT CÂU TIẾNG VIỆT!
@@ -304,6 +313,17 @@ def validate(s, slot=""):
         elif t == "bullet_steps":
             need(str_list(sc.get("steps"), 2), "bullet_steps thiếu steps")
             sc["steps"] = [str(x).strip()[:75] for x in sc["steps"][:4]]
+        elif t == "quiz_poll":
+            need(sc.get("option_a") and sc.get("option_b"), "quiz_poll thiếu option_a/option_b")
+            sc["option_a"] = str(sc["option_a"]).strip()[:42]
+            sc["option_b"] = str(sc["option_b"]).strip()[:42]
+            sc["winner"] = "A" if str(sc.get("winner", "B")).strip().upper() == "A" else "B"
+            sc["vote_split"] = str(sc.get("vote_split") or "84%").strip()[:8]
+        elif t == "before_after":
+            need(sc.get("before_text") and sc.get("after_text"), "before_after thiếu before_text/after_text")
+            sc["before_text"] = str(sc["before_text"]).strip()[:46]
+            sc["after_text"] = str(sc["after_text"]).strip()[:46]
+            sc["speedup"] = str(sc.get("speedup") or "10X NHANH HƠN").strip()[:22]
     c = s.get("cta")
     need(isinstance(c, dict) and c.get("highlight_metric") and c.get("summary") and c.get("voiceover"), "cta sai")
     c["button_text"] = SLOT_CTA_BUTTON.get(slot) or c.get("button_text") or "📋 Copy trọn bộ Prompt dưới Bình luận"
@@ -315,6 +335,11 @@ def validate(s, slot=""):
         yt_title = re.split(r"[.!?\n]", clean_cap)[0].strip()
     s["youtube_title"] = sanitize_tiktok_text(yt_title[:70])
 
+    yt_alt = re.sub(r"#\S+", "", str(s.get("youtube_title_alt") or "")).strip(" -–—.|")
+    if not yt_alt or yt_alt == s["youtube_title"]:
+        yt_alt = f"90% làm sai bước này! {s['youtube_title'][:48]}"
+    s["youtube_title_alt"] = sanitize_tiktok_text(yt_alt[:72])
+
     full_pr = str(s.get("full_prompt") or "").strip()
     if not full_pr:
         for sc in s["scenes"]:
@@ -322,7 +347,7 @@ def validate(s, slot=""):
                 full_pr = str(sc["prompt_text"]).strip()
                 break
     s["full_prompt"] = full_pr[:420]
-    s.setdefault("pinned_question", "Bạn đang tốn nhiều thời gian nhất cho việc lặp lại nào mỗi ngày? Chia sẻ dưới bình luận nhé!")
+    s.setdefault("pinned_question", "Bạn chọn Cách A hay Cách B? Gõ nhanh 1 chữ dưới bình luận nhé!")
 
     all_vo = [h["voiceover"]] + [sc["voiceover"] for sc in s["scenes"]] + [c["voiceover"]]
     total_words = sum(len(str(v).split()) for v in all_vo)
@@ -345,6 +370,7 @@ def _fallback_script(topic, slot, theme):
     return validate({
         "badge": _suggest_series_badge(topic, 1),
         "youtube_title": f"{topic[:52]} chỉ trong 15 giây",
+        "youtube_title_alt": f"Đừng làm tay nữa! Mẹo {topic[:42]} cực nhanh",
         "bg_theme": theme if theme in THEMES else "clean_light",
         "mascot": False,
         "voice": SLOT_VOICE.get(slot, "vi-VN-HoaiMyNeural"),
@@ -612,3 +638,23 @@ Trả về JSON đúng định dạng:
             print(f"[gemini] generate_evergreen_topics ({model}) lỗi: {str(ex)[:100]}")
             time.sleep(2)
     return [(slot, THEMES[(len(recent) + offset) % len(THEMES)], f"Bí quyết ứng dụng AI tối ưu hiệu suất làm việc ca {slot}")]
+
+
+def generate_comment_reply(video_topic, viewer_comment, api_key=None):
+    """Sinh câu trả lời thân thiện, hữu ích và gợi mở thảo luận tiếp (15-32 từ) cho bình luận của khán giả trên YouTube Shorts."""
+    keys = get_api_keys(api_key)
+    prompt = f"""Bạn là chủ kênh 'Thiện AI Thực Chiến' (chia sẻ mẹo AI & tự động hóa tiếng Việt).
+Video có chủ đề: "{video_topic}"
+Khán giả vừa bình luận: "{viewer_comment}"
+
+Hãy viết 1 câu trả lời ngắn gọn (14-30 từ), thân thiện, tự nhiên như người thật, giải đáp hoặc cảm ơn đúng trọng tâm và hỏi thêm 1 ý nhỏ để khán giả hào hứng tương tác tiếp. Tuyệt đối không bán hàng, không gắn số điện thoại.
+Trả về JSON: {{"reply": "Nội dung câu trả lời"}}"""
+    for model in MODELS[:4]:
+        try:
+            res, _ = _call_with_rotation(model, prompt, keys)
+            rep = str(res.get("reply", "")).strip()
+            if len(rep) >= 6:
+                return rep[:220]
+        except Exception:
+            continue
+    return "Cảm ơn bạn đã chia sẻ nhé! Bạn đang muốn áp dụng mẹo AI này vào công việc cụ thể nào để mình lên tiếp phần sau? 🙌"
