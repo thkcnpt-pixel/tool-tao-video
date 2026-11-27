@@ -71,39 +71,83 @@ class SheetsClient:
         self.svc.values().batchUpdate(spreadsheetId=self.sheet_id,
                                       body={"valueInputOption": "RAW", "data": data}).execute()
 
-    def top_performing_hooks(self, n=4):
-        """Trả về danh sách các chủ đề/tiêu đề hiệu quả nhất sắp theo Điểm Tương Tác (Views + 35*Likes + 80*Comments)."""
+    def audience_insights(self):
+        """Phân tích toàn diện phản hồi khán giả từ các video đã đăng:
+        - top_winners: Top 4 video có điểm giữ chân & tương tác cao nhất.
+        - low_performers: 3 chủ đề ít tương tác nhất (để AI tránh lặp lại góc tiếp cận nhàm chán).
+        - best_themes: Các bg_theme có điểm trung bình cao nhất.
+        - viewer_comments: Bình luận/yêu cầu thực tế của người xem dưới video.
+        """
         try:
-            from youtube_uploader import fetch_video_metrics
+            from youtube_uploader import fetch_audience_comments, fetch_video_metrics
         except Exception:
             fetch_video_metrics = lambda ids: {}
+            fetch_audience_comments = lambda ids: []
+
         published = [r for r in self.rows() if r["status"] == "DA_DANG" and r["topic"]]
-        yt_map = {}
+        yt_ids = []
         for r in published:
             ref = str(r.get("video_url_or_drive_id", ""))
             if "|" in ref:
-                yt_map[ref.split("|", 1)[1]] = r
-        metrics = fetch_video_metrics(list(yt_map.keys())) if yt_map else {}
+                yt_ids.append(ref.split("|", 1)[1])
+
+        metrics = fetch_video_metrics(yt_ids) if yt_ids else {}
+        comments = fetch_audience_comments(yt_ids) if yt_ids else []
+
         scored = []
+        theme_scores = {}
         for r in published:
             ref = str(r.get("video_url_or_drive_id", ""))
             yid = ref.split("|", 1)[1] if "|" in ref else ""
-            m = metrics.get(yid, {"views": 0, "likes": 0, "comments": 0, "score": 0})
+            m = metrics.get(yid, {"views": 0, "likes": 0, "comments": 0, "apv": 0.0, "score": 0})
+            th = r.get("bg_theme") or "clean_light"
+            apv_str = f", giữ chân {m['apv']}%" if m.get("apv") else ""
             stat_tag = (
-                f" [{m['views']} xem, {m['likes']} thích, {m['comments']} bình luận | theme={r.get('bg_theme', '')}]"
+                f" [{m['views']} xem, {m['likes']} thích, {m['comments']} cmt{apv_str} | theme={th}]"
                 if m["views"]
                 else ""
             )
-            scored.append((m["score"], f"{r['topic']} (Caption: {r['caption'][:75]}){stat_tag}"))
+            scored.append((m["score"], m["views"], r["topic"], th, f"{r['topic']} (Caption: {r['caption'][:70]}){stat_tag}"))
+            if m["views"] > 0:
+                theme_scores.setdefault(th, []).append(m["score"])
+
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [x[1] for x in scored[:n]]
+        winners = [x[4] for x in scored[:4]]
+        with_views = [x for x in scored if x[1] > 0]
+        losers = [f"{x[2]} ({x[1]} xem)" for x in with_views[-3:]] if len(with_views) >= 5 else []
+        best_themes = sorted(theme_scores.keys(), key=lambda k: sum(theme_scores[k]) / len(theme_scores[k]), reverse=True)
+        return {
+            "winners": winners,
+            "losers": losers,
+            "best_themes": best_themes,
+            "comments": comments,
+        }
+
+    def top_performing_hooks(self, n=4):
+        """Trả về danh sách các chủ đề/tiêu đề hiệu quả nhất sắp theo Điểm Giữ Chân & Tương Tác."""
+        return self.audience_insights()["winners"][:n]
 
     def next_buffered(self, slot):
-        """Lấy video đầu tiên đã dựng sẵn trong kho (DA_DUNG_SAN) đúng theo ca (TRUA / TOI)."""
-        for r in self.rows():
-            if r["status"] == "DA_DUNG_SAN" and r["slot"] == slot and r["video_url_or_drive_id"]:
-                return r
-        return None
+        """Smart Vault Dispatch: Lấy video dựng sẵn trong kho (DA_DUNG_SAN) đúng ca, ưu tiên phong cách/chủ đề đang có tương tác cao nhất."""
+        candidates = [
+            r for r in self.rows()
+            if r["status"] == "DA_DUNG_SAN" and r["slot"] == slot and r["video_url_or_drive_id"]
+        ]
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        try:
+            ins = self.audience_insights()
+            best_th = ins.get("best_themes", [])
+            if best_th:
+                for th in best_th[:2]:
+                    for c in candidates:
+                        if c.get("bg_theme") == th:
+                            return c
+        except Exception:
+            pass
+        return candidates[0]
 
     def buffered_counts(self):
         """Đếm số lượng video dựng sẵn (DA_DUNG_SAN) theo từng ca."""

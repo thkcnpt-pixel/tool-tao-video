@@ -111,21 +111,90 @@ def post_top_comment(video_id, comment_text):
         return False
 
 
+def fetch_retention_analytics(video_ids):
+    """Đọc Tỷ lệ giữ chân trung bình (averageViewPercentage %) từ YouTube Analytics API (scope: yt-analytics.readonly)."""
+    if not video_ids:
+        return {}
+    try:
+        yta = build(
+            "youtubeAnalytics", "v2",
+            credentials=Credentials(
+                token=None,
+                refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip(),
+                client_id=_parse_client_secret()[0],
+                client_secret=_parse_client_secret()[1],
+                token_uri="https://oauth2.googleapis.com/token",
+                scopes=["https://www.googleapis.com/auth/yt-analytics.readonly"],
+            ),
+            cache_discovery=False,
+        )
+        today = datetime.datetime.now(VN).date()
+        start = (today - datetime.timedelta(days=60)).strftime("%Y-%m-%d")
+        end = today.strftime("%Y-%m-%d")
+        res = yta.reports().query(
+            ids="channel==MINE",
+            startDate=start,
+            endDate=end,
+            metrics="views,averageViewPercentage,likes,comments",
+            dimensions="video",
+            filters=f"video=={','.join(video_ids[:40])}",
+        ).execute()
+        out = {}
+        for row in res.get("rows", []):
+            vid, v, apv = row[0], int(row[1]), float(row[2])
+            out[vid] = {"views": v, "apv": round(apv, 1)}
+        return out
+    except Exception:
+        return {}
+
+
+def fetch_audience_comments(video_ids, limit=8):
+    """Đọc các bình luận/câu hỏi thực tế của người xem dưới các video đã đăng để AI tự tạo nội dung trả lời đúng nhu cầu."""
+    if not video_ids:
+        return []
+    comments = []
+    try:
+        yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.readonly"])
+        for vid in list(reversed(video_ids))[:6]:
+            try:
+                res = yt.commentThreads().list(
+                    part="snippet", videoId=vid, maxResults=5, order="relevance", textFormat="plainText"
+                ).execute()
+                for it in res.get("items", []):
+                    top = it.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
+                    txt = str(top.get("textDisplay") or "").strip()
+                    # Bỏ qua bình luận ghim Prompt của chính chủ kênh
+                    if not txt or "MẪU CÂU LỆNH ĐẦY ĐỦ" in txt or "Comment ý kiến của bạn" in txt:
+                        continue
+                    if len(txt) >= 8:
+                        comments.append(txt[:140])
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return comments[:limit]
+
+
 def fetch_video_metrics(video_ids):
-    """Đọc lượt xem + lượt thích + bình luận thực tế và tính điểm chất lượng giữ chân/tương tác (Engagement Score)."""
+    """Đọc lượt xem + lượt thích + bình luận + % giữ chân (APV) thực tế và tính điểm chất lượng (Engagement & Retention Score)."""
     if not video_ids:
         return {}
     try:
         yt = get_youtube_service(["https://www.googleapis.com/auth/youtube.readonly"])
         res = yt.videos().list(part="statistics", id=",".join(video_ids[:50])).execute()
+        ret_map = fetch_retention_analytics(video_ids)
         out = {}
         for it in res.get("items", []):
+            vid = it["id"]
             st = it.get("statistics", {})
             v = int(st.get("viewCount", 0))
             lk = int(st.get("likeCount", 0))
             cm = int(st.get("commentCount", 0))
-            score = v + lk * 35 + cm * 80
-            out[it["id"]] = {"views": v, "likes": lk, "comments": cm, "score": score}
+            apv = ret_map.get(vid, {}).get("apv", 0.0)
+            # Trọng số học máy: Views + 35*Likes + 80*Comments + thưởng lớn cho video giữ chân APV > 70%
+            apv_bonus = int(max(0.0, apv - 50.0) * 12) if apv else 0
+            score = v + lk * 35 + cm * 80 + apv_bonus
+            out[vid] = {"views": v, "likes": lk, "comments": cm, "apv": apv, "score": score}
         return out
     except Exception:
         return {}

@@ -86,10 +86,11 @@ def maybe_refill_evergreen_topics(sheets, now):
     """Đảm bảo luôn có sẵn chủ đề CHO_TAO cho Trưa & Tối để Xưởng Buffer Factory chạy ngầm."""
     rows = sheets.rows()
     all_topics = [r["topic"] for r in rows if r["topic"]]
+    insights = sheets.audience_insights()
     for sl in ("TRUA", "TOI"):
         pend_sl = [r for r in rows if r["status"] == "CHO_TAO" and r["slot"] == sl]
         if len(pend_sl) < 2:
-            batch = generate_evergreen_topics(sl, count=4, recent=all_topics)
+            batch = generate_evergreen_topics(sl, count=4, recent=all_topics, insights=insights)
             for idx, (s_name, th, tp) in enumerate(batch):
                 d = (now + datetime.timedelta(days=1 + idx)).date()
                 rid = f"{d:%Y%m%d}_{s_name}_{now:%H%M}{idx}"

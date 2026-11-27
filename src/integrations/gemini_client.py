@@ -465,7 +465,43 @@ def generate_script(topic, slot="", recent=(), theme=None, api_key=None, retries
     return _fallback_script(topic, slot, theme)
 
 
-def generate_topic(slot, recent=(), api_key=None):
+def fetch_yt_autocomplete(seeds=("cách dùng ai", "mẹo chatgpt", "dùng ai làm excel", "gemini ai")):
+    """Lấy gợi ý tìm kiếm thực tế của người dùng YouTube Việt Nam (không cần API key)."""
+    found = []
+    for q in seeds:
+        try:
+            r = requests.get(
+                "https://suggestqueries.google.com/complete/search",
+                params={"client": "firefox", "ds": "yt", "hl": "vi", "gl": "VN", "q": q},
+                timeout=6,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if r.status_code == 200:
+                arr = r.json()
+                if isinstance(arr, list) and len(arr) > 1 and isinstance(arr[1], list):
+                    for item in arr[1][:4]:
+                        s = str(item).strip()
+                        if s and s not in found:
+                            found.append(s)
+        except Exception:
+            continue
+    return found[:12]
+
+
+def _format_insights_block(insights=None):
+    if not insights:
+        return ""
+    parts = []
+    if insights.get("comments"):
+        parts.append("Câu hỏi / Bình luận thật từ khán giả (ƯU TIÊN làm video trả lời trực tiếp):\n" + "\n".join(f"- {c}" for c in insights["comments"][:5]))
+    if insights.get("winners"):
+        parts.append("Các chủ đề ĐANG ĐƯỢC XEM & GIỮ CHÂN TỐT NHẤT (hãy đào sâu thêm góc mới thuộc nhóm này):\n" + "\n".join(f"- {w}" for w in insights["winners"][:3]))
+    if insights.get("losers"):
+        parts.append("Các chủ đề ÍT NGƯỜI XEM (tránh lặp lại kiểu tiếp cận này):\n" + "\n".join(f"- {l}" for l in insights["losers"][:3]))
+    return ("\n\n" + "\n\n".join(parts)) if parts else ""
+
+
+def generate_topic(slot, recent=(), api_key=None, insights=None):
     keys = get_api_keys(api_key)
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     news_block = ""
@@ -473,12 +509,15 @@ def generate_topic(slot, recent=(), api_key=None):
         headlines = fetch_tech_headlines()
         if headlines:
             news_block = "\nTin tức công nghệ/AI mới nhất hôm nay:\n" + "\n".join(f"- {h}" for h in headlines)
+    trends = fetch_yt_autocomplete()
+    trend_block = ("\nTừ khóa người Việt ĐANG TÌM NHIỀU trên YouTube:\n" + "\n".join(f"- {x}" for x in trends[:8])) if trends else ""
+    ins_block = _format_insights_block(insights)
     prompt = f"""Bạn là biên tập viên kênh 'Thiện AI Thực Chiến'.
-Ca phát sóng: {slot} — {SLOT_HINT.get(slot, '')}{news_block}
+Ca phát sóng: {slot} — {SLOT_HINT.get(slot, '')}{news_block}{trend_block}{ins_block}
 Các chủ đề đã làm gần đây (TUYỆT ĐỐI KHÔNG TRÙNG LẶP):
 {avoid}
 
-Hãy đề xuất 1 chủ đề video ngắn (20-30 giây) mới mẻ, thực tế.
+Hãy đề xuất 1 chủ đề video ngắn (20-30 giây) đánh trúng nhu cầu tìm kiếm hoặc câu hỏi của khán giả.
 Trả về JSON: {{"topic": "Tên chủ đề ngắn gọn 10-18 từ", "bg_theme": "{'|'.join(THEMES)}"}}"""
     rotated_theme = THEMES[len(recent) % len(THEMES)]
     for model in MODELS[:5]:
@@ -523,8 +562,8 @@ Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "clean_light", "topic
     return []
 
 
-def generate_evergreen_topics(slot, count=6, recent=(), api_key=None):
-    """Sinh danh sách chủ đề EVERGREEN (giá trị bền vững, để 30-60 ngày vẫn hấp dẫn, không phụ thuộc tin tức ngày) cho kho dự trữ Ca Trưa & Ca Tối."""
+def generate_evergreen_topics(slot, count=6, recent=(), api_key=None, insights=None):
+    """Sinh danh sách chủ đề EVERGREEN theo đúng nhu cầu tìm kiếm & phản hồi khán giả thực tế cho kho dự trữ Ca Trưa & Ca Tối."""
     keys = get_api_keys(api_key)
     avoid = "\n".join(f"- {t}" for t in recent[-35:]) or "(chưa có)"
     focus = (
@@ -532,9 +571,16 @@ def generate_evergreen_topics(slot, count=6, recent=(), api_key=None):
         if slot == "TRUA"
         else "Quy trình 3 bước thực chiến, câu lệnh Prompt mẫu copy-dùng-ngay, mẹo xử lý Word/Excel/PDF/Email/Báo cáo/Học tập bằng AI"
     )
+    trends = fetch_yt_autocomplete()
+    trend_block = ("\nTừ khóa người Việt ĐANG TÌM KIẾM NHIỀU NHẤT trên YouTube:\n" + "\n".join(f"- {x}" for x in trends[:10])) if trends else ""
+    ins_block = _format_insights_block(insights)
     prompt = f"""Bạn là giám đốc nội dung kênh 'Thiện AI Thực Chiến'.
-Hãy đề xuất {count} chủ đề video ngắn EVERGREEN (giá trị thực chiến bền vững, xem vào bất kỳ thời điểm nào trong năm cũng hữu ích, KHÔNG gắn ngày tháng cụ thể) cho ca {slot}:
-Định hướng ca {slot}: {focus}.
+Hãy đề xuất {count} chủ đề video ngắn EVERGREEN (giá trị thực chiến bền vững, KHÔNG gắn ngày tháng cụ thể) cho ca {slot}:
+Định hướng ca {slot}: {focus}.{trend_block}{ins_block}
+
+Quy tắc tối ưu theo nhu cầu khán giả:
+- Dành khoảng 60% chủ đề bám sát từ khóa người Việt đang tìm kiếm hoặc đào sâu nhóm chủ đề đang có điểm xem/giữ chân cao nhất.
+- Nếu có câu hỏi từ bình luận khán giả, biến ít nhất 1 câu hỏi thành 1 chủ đề trả lời trực tiếp.
 
 Các chủ đề đã có trong kho (TUYỆT ĐỐI KHÔNG TRÙNG Ý TƯỞNG):
 {avoid}
@@ -552,7 +598,7 @@ Trả về JSON đúng định dạng:
                 if tp:
                     out.append((sl := slot, th, tp))
             if out:
-                print(f"[gemini] đã sinh {len(out)} chủ đề Evergreen mới cho kho dự trữ ca {slot}")
+                print(f"[gemini] đã sinh {len(out)} chủ đề Evergreen tối ưu theo nhu cầu khán giả cho ca {slot}")
                 return out
         except Exception as ex:
             print(f"[gemini] generate_evergreen_topics ({model}) lỗi: {str(ex)[:100]}")

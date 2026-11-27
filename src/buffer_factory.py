@@ -40,7 +40,8 @@ def ensure_pending_row(sheets, slot, now):
         if r["status"] == "CHO_TAO" and r["slot"] == slot:
             return r
     all_topics = [r["topic"] for r in sheets.rows() if r["topic"]]
-    new_items = generate_evergreen_topics(slot, count=6, recent=all_topics)
+    insights = sheets.audience_insights()
+    new_items = generate_evergreen_topics(slot, count=6, recent=all_topics, insights=insights)
     for idx, (sl, th, tp) in enumerate(new_items):
         d = (now + datetime.timedelta(days=1 + idx)).date()
         rid = f"BUF_{now:%Y%m%d_%H%M%S}_{sl}_{idx}"
