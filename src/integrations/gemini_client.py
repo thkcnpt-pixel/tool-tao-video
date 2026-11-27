@@ -63,14 +63,16 @@ SCENE_TYPES = {
 
 SLOT_HINT = {
     "SANG": "Ca sáng: tin tức AI/công nghệ nhanh. Ưu tiên stat_card, ranking_card hoặc myth_vs_fact.",
-    "TRUA": "Ca trưa: so sánh tính năng/chia sẻ giá trị, lồng ghép khéo léo gói AI Pro tự nhiên. Ưu tiên comparison, chat_demo hoặc checklist_card.",
-    "TOI": "Ca tối: mẹo thực chiến / quy trình ứng dụng AI. Ưu tiên prompt_card, bullet_steps hoặc checklist_card.",
+    "TRUA": "Ca trưa: so sánh tính năng/chia sẻ giá trị, tối ưu chi phí thông minh. Ưu tiên comparison, chat_demo hoặc checklist_card.",
+    "CHIEU": "Ca chiều tan tầm: giải cứu việc văn phòng cuối ngày (Excel, PDF, Báo cáo, Email nhanh). Ưu tiên bullet_steps, prompt_card hoặc myth_vs_fact.",
+    "TOI": "Ca tối: câu lệnh Prompt thực chiến / quy trình tự động hóa sâu. Ưu tiên prompt_card, bullet_steps hoặc checklist_card.",
 }
 
 SLOT_VOICE = {
     "SANG": "vi-VN-HoaiMyNeural",
     "TRUA": "vi-VN-NamMinhNeural",
-    "TOI": "vi-VN-HoaiMyNeural",
+    "CHIEU": "vi-VN-HoaiMyNeural",
+    "TOI": "vi-VN-NamMinhNeural",
 }
 
 # Nút CTA biến thiên thông minh theo từng ca phát sóng (Slot-Aware Conversion CTA)
@@ -85,6 +87,7 @@ HOOK_ARCHETYPES = [
 SLOT_CTA_BUTTON = {
     "SANG": "👇 Lấy câu lệnh mẫu ở Bình luận đầu",
     "TRUA": "📋 Copy trọn bộ Prompt dưới Bình luận",
+    "CHIEU": "⚡ Lưu ngay & Copy mẫu ở Bình luận",
     "TOI": "👇 Mở Bình luận lấy mẫu dùng ngay",
 }
 
@@ -536,9 +539,10 @@ def generate_batch_topics(recent=(), days=3, api_key=None):
     avoid = "\n".join(f"- {t}" for t in recent) or "(chưa có)"
     headlines = fetch_tech_headlines()
     news_block = "\nTin tức AI/công nghệ mới nhất:\n" + "\n".join(f"- {h}" for h in headlines) if headlines else ""
-    count = days * 3
+    slots = ("SANG", "TRUA", "CHIEU", "TOI")
+    count = days * len(slots)
     prompt = f"""Bạn là giám đốc nội dung kênh 'Thiện AI Thực Chiến'.
-Hãy lập kế hoạch {count} chủ đề video ngắn (chia đều theo thứ tự SANG, TRUA, TOI cho {days} ngày tới).
+Hãy lập kế hoạch {count} chủ đề video ngắn (chia đều theo thứ tự SANG, TRUA, CHIEU, TOI cho {days} ngày tới).
 {news_block}
 Các chủ đề đã làm (KHÔNG TRÙNG LẶP):
 {avoid}
@@ -547,15 +551,15 @@ Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "clean_light", "topic
     for model in MODELS[:5]:
         try:
             res, _ = _call_with_rotation(model, prompt, keys)
-            items = res.get("items", [])
+            items = res if isinstance(res, list) else res.get("items", [])
             out = []
             for idx, it in enumerate(items[:count]):
-                sl = it.get("slot") if it.get("slot") in ("SANG", "TRUA", "TOI") else ("SANG", "TRUA", "TOI")[idx % 3]
+                sl = it.get("slot") if it.get("slot") in slots else slots[idx % len(slots)]
                 th = THEMES[(len(recent) + idx) % len(THEMES)]
                 tp = str(it.get("topic", "")).strip()
                 if tp:
                     out.append((sl, th, tp))
-            if len(out) >= 3:
+            if len(out) >= 4:
                 return out
         except Exception:
             time.sleep(2)
@@ -563,14 +567,15 @@ Trả về JSON: {{"items": [{{"slot": "SANG", "bg_theme": "clean_light", "topic
 
 
 def generate_evergreen_topics(slot, count=6, recent=(), api_key=None, insights=None):
-    """Sinh danh sách chủ đề EVERGREEN theo đúng nhu cầu tìm kiếm & phản hồi khán giả thực tế cho kho dự trữ Ca Trưa & Ca Tối."""
+    """Sinh danh sách chủ đề EVERGREEN theo đúng nhu cầu tìm kiếm & phản hồi khán giả thực tế cho kho dự trữ Ca Trưa, Ca Chiều & Ca Tối."""
     keys = get_api_keys(api_key)
     avoid = "\n".join(f"- {t}" for t in recent[-35:]) or "(chưa có)"
-    focus = (
-        "So sánh tính năng AI Free vs Pro, bài toán tiết kiệm thời gian/chi phí thực tế, cách chọn công cụ AI thông minh cho dân văn phòng/kinh doanh"
-        if slot == "TRUA"
-        else "Quy trình 3 bước thực chiến, câu lệnh Prompt mẫu copy-dùng-ngay, mẹo xử lý Word/Excel/PDF/Email/Báo cáo/Học tập bằng AI"
-    )
+    focus_map = {
+        "TRUA": "So sánh tính năng AI Free vs Pro, bài toán tiết kiệm thời gian/chi phí thực tế, cách chọn công cụ AI thông minh cho dân văn phòng/kinh doanh",
+        "CHIEU": "Giải cứu việc văn phòng cuối giờ: sửa nhanh lỗi Excel/Google Sheets, tóm tắt PDF/Word dài 100 trang, lập báo cáo & xử lý Email trong 15 giây",
+        "TOI": "Quy trình 3 bước tự động hóa thực chiến, câu lệnh Prompt mẫu chuyên sâu copy-dùng-ngay cho công việc, học tập và sáng tạo nội dung",
+    }
+    focus = focus_map.get(slot, focus_map["TOI"])
     trends = fetch_yt_autocomplete()
     trend_block = ("\nTừ khóa người Việt ĐANG TÌM KIẾM NHIỀU NHẤT trên YouTube:\n" + "\n".join(f"- {x}" for x in trends[:10])) if trends else ""
     ins_block = _format_insights_block(insights)
@@ -587,7 +592,7 @@ Các chủ đề đã có trong kho (TUYỆT ĐỐI KHÔNG TRÙNG Ý TƯỞNG):
 
 Trả về JSON đúng định dạng:
 {{"items": [{{"bg_theme": "{'|'.join(THEMES)}", "topic": "Tên chủ đề súc tích 10-18 từ"}}, ...]}}"""
-    offset = 0 if slot == "TRUA" else 3
+    offset = {"TRUA": 0, "CHIEU": 2, "TOI": 5}.get(slot, 3)
     for model in MODELS[:5]:
         try:
             res, _ = _call_with_rotation(model, prompt, keys)

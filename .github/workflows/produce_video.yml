@@ -1,18 +1,20 @@
-name: Produce Short Video (3 ca/ngày)
+name: Produce Short Video (4 ca/ngày)
 
 on:
   schedule:
     # Đặt ở phút :43 (tránh kẹt hàng đợi :00/:30 của GitHub) & trước giờ vàng ~2 tiếng để YouTube xử lý HD + lên lịch chuẩn từng giây:
-    # Ca 1 (Sáng 07:00 VN) -> Chạy lúc 04:43 VN (21:43 UTC hôm trước)
+    # Ca 1 (Sáng 07:00 VN)  -> Chạy lúc 04:43 VN (21:43 UTC hôm trước)
     - cron: "43 21 * * *"
-    # Ca 2 (Trưa 12:00 VN) -> Chạy lúc 09:43 VN (02:43 UTC)
+    # Ca 2 (Trưa 12:00 VN)  -> Chạy lúc 09:43 VN (02:43 UTC)
     - cron: "43 2 * * *"
-    # Ca 3 (Tối 20:00 VN)  -> Chạy lúc 17:43 VN (10:43 UTC)
-    - cron: "43 10 * * *"
+    # Ca 3 (Chiều 16:30 VN) -> Chạy lúc 14:43 VN (07:43 UTC)
+    - cron: "43 7 * * *"
+    # Ca 4 (Tối 20:30 VN)   -> Chạy lúc 18:43 VN (11:43 UTC)
+    - cron: "43 11 * * *"
   workflow_dispatch:
     inputs:
       slot:
-        description: "Ca phát sóng (SANG / TRUA / TOI - để trống sẽ lấy theo giờ hiện tại)"
+        description: "Ca phát sóng (SANG / TRUA / CHIEU / TOI - để trống sẽ lấy theo giờ hiện tại)"
         required: false
         default: ""
       seed_topic:

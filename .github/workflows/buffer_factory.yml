@@ -1,12 +1,12 @@
-name: Buffer Factory (Kho Dự Trữ 60 Video 30 Ngày - Trưa & Tối)
+name: Buffer Factory (Kho Dự Trữ 21 Video 4 Ca/Ngày - Trưa, Chiều & Tối)
 
 on:
   schedule:
-    # Đặt sau các khung giờ vàng (07:19, 12:19, 20:19 VN + đêm thấp điểm) để vừa đăng bù Bình luận Prompt ngay sau khi video lên sóng, vừa dựng bù kho đầy 14/14:
+    # Đặt ngay sau 4 khung giờ vàng (07:19, 12:19, 16:49, 20:49 VN + 00:19 đêm) để vừa thả bù Bình luận Prompt ngay khi video lên sóng, vừa nạp đầy kho 21/21:
     - cron: "19 0 * * *"
     - cron: "19 5 * * *"
-    - cron: "19 9 * * *"
-    - cron: "19 13 * * *"
+    - cron: "49 9 * * *"
+    - cron: "49 13 * * *"
     - cron: "19 17 * * *"
   workflow_dispatch:
     inputs:

@@ -70,8 +70,8 @@ var HELP_TEXT =
   '• /tao <chủ đề> — Dựng ngay video theo chủ đề bạn gõ\n' +
   '• /them <chủ đề> — Lưu chủ đề vào hàng đợi Google Sheet\n' +
   '• /xoa — Bỏ qua (hủy) chủ đề CHO_TAO tiếp theo trong hàng đợi\n' +
-  '• /sang, /trua, /toi — Dựng ngay 1 video cho Ca Sáng / Trưa / Tối\n' +
-  '• /kho — Xem tồn kho 60 video dựng sẵn 30 ngày (Trưa & Tối)\n' +
+  '• /sang, /trua, /chieu, /toi — Dựng ngay 1 video cho Ca Sáng / Trưa / Chiều / Tối\n' +
+  '• /kho — Xem tồn kho 21 video dựng sẵn (Trưa, Chiều & Tối)\n' +
   '• /xem_kho — Xem danh sách & link Drive 5 video dựng sẵn sắp phát\n' +
   '• /nap_kho — Ra lệnh dựng nạp thêm ngay 3 video vào kho dự trữ\n' +
   '• /lich — Xem số bài Chờ tạo, Đã dựng sẵn, Đã đăng\n' +
@@ -82,10 +82,11 @@ var HELP_TEXT =
   '• 🔄 Tạo lại: Bấm nút [🔄 Tạo lại] để AI viết kịch bản mới và dựng lại video khác.\n' +
   '• ✅ Duyệt: Bấm nút [✅ Duyệt] -> Tự động đăng lên YouTube Shorts (tự lên lịch giờ vàng hoặc bật Public ngay) + trả Bản Final sạch về đây để bạn đăng TikTok.\n' +
   '• ❌ Hủy: Bỏ qua video đó.\n\n' +
-  '3️⃣ LỊCH CHẠY TỰ ĐỘNG HÀNG NGÀY (GIỜ VN):\n' +
-  '• Ca Sáng: 04:43 dựng Live -> 07:00 lên sóng\n' +
-  '• Ca Trưa: 09:43 xuất Kho  -> 12:00 lên sóng\n' +
-  '• Ca Tối:  17:43 xuất Kho  -> 20:00 lên sóng\n' +
+  '3️⃣ LỊCH CHẠY TỰ ĐỘNG 4 CA/NGÀY (GIỜ VN):\n' +
+  '• Ca Sáng:  04:43 dựng Live -> 07:00 lên sóng\n' +
+  '• Ca Trưa:  09:43 xuất Kho  -> 12:00 lên sóng\n' +
+  '• Ca Chiều: 14:43 xuất Kho  -> 16:30 lên sóng\n' +
+  '• Ca Tối:   18:43 xuất Kho  -> 20:30 lên sóng\n' +
   '🔗 Google Sheet: https://docs.google.com/spreadsheets/d/' + DEFAULT_SHEET_ID + '/edit';
 
 function doPost(e) {
@@ -149,7 +150,7 @@ function doPost(e) {
       return ContentService.createTextOutput('ok');
     }
 
-    // 2) Tin nhắn văn bản: Lệnh /help, /start, /them, /stats, /tao, /sang, /trua, /toi, /lich hoặc Reply sửa caption
+    // 2) Tin nhắn văn bản
     if (update.message && update.message.text) {
       var m = update.message;
       var mChat = String(m.chat.id);
@@ -163,7 +164,7 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /them <chủ đề> (chỉ ghi vào hàng đợi CHO_TAO trên Sheet trong 1 giây, chưa dựng ngay)
+      // Lệnh /them <chủ đề>
       if (txt.indexOf('/them') === 0) {
         var newTopic = txt.replace(/^\/them(@\S+)?\s*/i, '').trim();
         if (!newTopic) {
@@ -186,26 +187,28 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /kho (xem tồn kho thông minh 14 video cho Ca Trưa & Ca Tối)
+      // Lệnh /kho (xem tồn kho 21 video cho Trưa, Chiều & Tối)
       if (/^\/kho(@\S+)?$/i.test(txt)) {
         var dK = getSheet_().getDataRange().getValues();
-        var bTrua = 0, bToi = 0, qTao = 0;
+        var bTrua = 0, bChieu = 0, bToi = 0, qTao = 0;
         for (var rk = 1; rk < dK.length; rk++) {
           var stK = String(dK[rk][COL_STATUS - 1]);
           var slK = String(dK[rk][COL_SLOT - 1] || '').toUpperCase();
           if (stK === 'DA_DUNG_SAN') {
             if (slK === 'TRUA') bTrua++;
+            else if (slK === 'CHIEU') bChieu++;
             else if (slK === 'TOI') bToi++;
           } else if (stK === 'CHO_TAO') qTao++;
         }
-        var bTotal = bTrua + bToi;
-        var daysReady = Math.min(bTrua, bToi);
+        var bTotal = bTrua + bChieu + bToi;
+        var daysReady = Math.min(bTrua, bChieu, bToi);
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
-          text: '📦 KHO DỰ TRỮ THÔNG MINH 7 NGÀY (TRƯA & TỐI):\n'
+          text: '📦 KHO DỰ TRỮ THÔNG MINH 4 CA/NGÀY:\n'
               + '━━━━━━━━━━━━━━━━━━━━\n'
-              + '• Tổng video đã dựng sẵn trên Drive: ' + bTotal + '/14 video\n'
-              + '  ☀️ Ca Trưa (12:00): ' + bTrua + '/7 video\n'
-              + '  🌙 Ca Tối (20:00): ' + bToi + '/7 video\n'
+              + '• Tổng video đã dựng sẵn trên Drive: ' + bTotal + '/21 video\n'
+              + '  ☀️ Ca Trưa (12:00):  ' + bTrua + '/7 video\n'
+              + '  🌇 Ca Chiều (16:30): ' + bChieu + '/7 video\n'
+              + '  🌙 Ca Tối (20:30):   ' + bToi + '/7 video\n'
               + '• Chủ đề chờ dựng (CHO_TAO): ' + qTao + ' bài\n\n'
               + '✨ Đủ phát sóng tự động liên tục: ~' + daysReady + ' ngày!\n'
               + '(🌅 Riêng Ca Sáng 07:00 luôn săn tin nóng & dựng trực tiếp mỗi sáng.\n'
@@ -214,7 +217,7 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /xem_kho (xem danh sách & link mở nhanh Google Drive của các video đã dựng sẵn trong kho)
+      // Lệnh /xem_kho
       if (/^\/xem_kho(@\S+)?$/i.test(txt)) {
         var dXK = getSheet_().getDataRange().getValues();
         var itemsXK = [];
@@ -235,18 +238,18 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /nap_kho (kích hoạt ngay 1 đợt dựng 3 video nạp vào kho và báo cáo về Telegram)
+      // Lệnh /nap_kho
       if (/^\/nap_kho(@\S+)?$/i.test(txt)) {
         var okB = dispatchWorkflow_('buffer_factory.yml', {batch_size: '3', notify: 'true'});
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
           text: okB
-            ? '⚙️ Đã kích hoạt Xưởng Sản Xuất Đệm: đang dựng thêm 3 video cất vào Kho Dự Trữ 30 Ngày (~8-10 phút nữa sẽ báo kết quả)!'
+            ? '⚙️ Đã kích hoạt Xưởng Sản Xuất Đệm: đang dựng thêm 3 video cất vào Kho Dự Trữ (~6-8 phút nữa sẽ báo kết quả)!'
             : '⚠️ Không gọi được buffer_factory.yml.'});
         dropPendingWebhook_();
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /xoa (bỏ qua dòng CHO_TAO tiếp theo trong lịch nếu không thích chủ đề đó)
+      // Lệnh /xoa
       if (/^\/xoa(@\S+)?$/i.test(txt)) {
         var shX = getSheet_();
         var dX = shX.getDataRange().getValues();
@@ -270,10 +273,10 @@ function doPost(e) {
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /stats (báo cáo các video đã xuất bản)
+      // Lệnh /stats
       if (txt.indexOf('/stats') === 0) {
         var rows = getSheet_().getDataRange().getValues();
-        var sCount = {SANG: 0, TRUA: 0, TOI: 0};
+        var sCount = {SANG: 0, TRUA: 0, CHIEU: 0, TOI: 0};
         var recentPub = [];
         for (var k = 1; k < rows.length; k++) {
           if (String(rows[k][COL_STATUS - 1]) === 'DA_DANG') {
@@ -284,19 +287,19 @@ function doPost(e) {
             recentPub.push('• ' + rows[k][COL_TOPIC - 1] + (ytPart ? '\n  ▶️ ' + ytPart : ''));
           }
         }
-        var totalPub = (sCount.SANG || 0) + (sCount.TRUA || 0) + (sCount.TOI || 0);
+        var totalPub = (sCount.SANG || 0) + (sCount.TRUA || 0) + (sCount.CHIEU || 0) + (sCount.TOI || 0);
         var last5 = recentPub.slice(-5).reverse();
         tg_('sendMessage', {chat_id: mChat, reply_to_message_id: m.message_id,
           text: '📈 THỐNG KÊ KÊNH & VIDEO ĐÃ ĐĂNG:\n'
               + '• Tổng số video đã xuất bản: ' + totalPub + ' video\n'
-              + '  (Ca Sáng: ' + (sCount.SANG || 0) + ' | Ca Trưa: ' + (sCount.TRUA || 0) + ' | Ca Tối: ' + (sCount.TOI || 0) + ')\n\n'
+              + '  (Sáng: ' + (sCount.SANG || 0) + ' | Trưa: ' + (sCount.TRUA || 0) + ' | Chiều: ' + (sCount.CHIEU || 0) + ' | Tối: ' + (sCount.TOI || 0) + ')\n\n'
               + (last5.length ? '🎬 5 video xuất bản gần nhất:\n' + last5.join('\n') : 'Chưa có video nào ở trạng thái DA_DANG.')});
         dropPendingWebhook_();
         return ContentService.createTextOutput('ok');
       }
 
-      // Lệnh /sang, /trua, /toi
-      var slotMatch = txt.match(/^\/(sang|trua|toi)(?:@\S+)?\s*(.*)$/i);
+      // Lệnh /sang, /trua, /chieu, /toi
+      var slotMatch = txt.match(/^\/(sang|trua|chieu|toi)(?:@\S+)?\s*(.*)$/i);
       if (slotMatch) {
         var sl = slotMatch[1].toUpperCase();
         var tp = (slotMatch[2] || '').trim();

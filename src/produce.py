@@ -53,8 +53,10 @@ def current_vn_slot():
     h = datetime.datetime.now(VN).hour
     if h < 9:
         return "SANG"
-    if h < 16:
+    if h < 13:
         return "TRUA"
+    if h < 18:
+        return "CHIEU"
     return "TOI"
 
 
@@ -84,11 +86,11 @@ def retry_pending_youtube(sheets, drive, bot):
 
 
 def maybe_refill_evergreen_topics(sheets, now):
-    """Đảm bảo luôn có sẵn chủ đề CHO_TAO cho Trưa & Tối để Xưởng Buffer Factory chạy ngầm."""
+    """Đảm bảo luôn có sẵn chủ đề CHO_TAO cho Trưa, Chiều & Tối để Xưởng Buffer Factory chạy ngầm."""
     rows = sheets.rows()
     all_topics = [r["topic"] for r in rows if r["topic"]]
     insights = sheets.audience_insights()
-    for sl in ("TRUA", "TOI"):
+    for sl in ("TRUA", "CHIEU", "TOI"):
         pend_sl = [r for r in rows if r["status"] == "CHO_TAO" and r["slot"] == sl]
         if len(pend_sl) < 2:
             batch = generate_evergreen_topics(sl, count=4, recent=all_topics, insights=insights)
@@ -105,28 +107,28 @@ def maybe_send_weekly_report(sheets, bot, now, slot):
     rows = sheets.rows()
     da_dang = sum(1 for r in rows if r["status"] == "DA_DANG")
     buf_counts = sheets.buffered_counts()
-    buf_total = buf_counts.get("TRUA", 0) + buf_counts.get("TOI", 0)
+    buf_total = buf_counts.get("TRUA", 0) + buf_counts.get("CHIEU", 0) + buf_counts.get("TOI", 0)
     top3 = sheets.top_performing_hooks(3)
     top_txt = "\n".join(f"  {i+1}. {h}" for i, h in enumerate(top3)) if top3 else "  (Đang cập nhật lượt xem)"
     bot.send_text(
         f"📊 BÁO CÁO TỔNG KẾT TUẦN — Thiện AI Thực Chiến\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"• Tổng số video đã xuất bản: {da_dang} video\n"
-        f"• Kho dự trữ dựng sẵn 30 ngày: {buf_total}/60 video "
-        f"(Trưa: {buf_counts.get('TRUA', 0)}/30 | Tối: {buf_counts.get('TOI', 0)}/30)\n\n"
+        f"• Kho dự trữ thông minh 4 ca/ngày: {buf_total}/21 video "
+        f"(Trưa: {buf_counts.get('TRUA', 0)}/7 | Chiều: {buf_counts.get('CHIEU', 0)}/7 | Tối: {buf_counts.get('TOI', 0)}/7)\n\n"
         f"🏆 Top 3 video hiệu quả nhất trên YouTube Shorts:\n{top_txt}\n\n"
-        f"✨ Ca Sáng vẫn săn tin nóng mỗi sáng; Ca Trưa & Tối phát siêu tốc từ Kho Dự Trữ!"
+        f"✨ Ca Sáng săn tin nóng mỗi sáng; Ca Trưa, Chiều & Tối phát siêu tốc từ Kho Dự Trữ!"
     )
 
 
 def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
-    """Lấy ngay video DA_DUNG_SAN từ Google Drive xuất bản lên YouTube Shorts + Telegram trong ~20 giây!"""
+    """Lấy ngay video DA_DUNG_SAN từ Google Drive xuất bản lên YouTube Shorts + Telegram trong ~25 giây!"""
     r = row["_row"]
     vid = str(row["video_url_or_drive_id"]).split("|")[0]
     sheets.update(r, status="DANG_DANG")
     buf_left = sheets.buffered_counts()
-    rem = buf_left.get("TRUA", 0) + buf_left.get("TOI", 0)
-    print(f"[vault] Xuất kho siêu tốc dòng {r} [{eff_slot}]: {row['id']} | drive_id={vid} (Còn {rem}/60 bài trong kho)")
+    rem = buf_left.get("TRUA", 0) + buf_left.get("CHIEU", 0) + buf_left.get("TOI", 0)
+    print(f"[vault] Xuất kho siêu tốc dòng {r} [{eff_slot}]: {row['id']} | drive_id={vid} (Còn {rem}/21 bài trong kho)")
 
     pinned_q, yt_title, full_pr, comm_txt = "", "", "", ""
     try:
@@ -173,7 +175,7 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
                 except Exception as ex:
                     print(f"[tiktok] CẢNH BÁO ({ex!r})")
 
-        vault_note = f"Đã kiểm duyệt sẵn • Tồn kho còn {rem}/14 video"
+        vault_note = f"Đã kiểm duyệt sẵn • Tồn kho còn {rem}/21 video"
         msg_id = bot.send_for_approval(
             mp4, row["id"], row["topic"], row["caption"],
             drive_id=vid, youtube_url=yt_url, youtube_mode=yt_mode, fb_url=fb_url, qa_note=vault_note, community_post=comm_txt,
@@ -188,7 +190,7 @@ def publish_from_vault(row, eff_slot, sheets, drive, bot, manual_approve=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--slot", choices=["SANG", "TRUA", "TOI"])
+    ap.add_argument("--slot", choices=["SANG", "TRUA", "CHIEU", "TOI"])
     ap.add_argument("--seed", help="thêm 1 dòng CHO_TAO với chủ đề này và dựng ngay")
     ap.add_argument("--video-id", help="chỉ định id dòng cần dựng (hoặc dựng lại)")
     ap.add_argument("--manual-approve", action="store_true")
@@ -210,8 +212,8 @@ def main():
     now = datetime.datetime.now(VN)
     slot = a.slot or current_vn_slot()
 
-    # 1) NẾU LÀ CA TRƯA / CA TỐI CHẠY TỰ ĐỘNG (không truyền --seed hay --video-id) -> ƯU TIÊN XUẤT KHO SIÊU TỐC TỪ KHO DỰ TRỮ 30 NGÀY!
-    if slot in ("TRUA", "TOI") and not a.seed and not a.video_id:
+    # 1) NẾU LÀ CA TRƯA / CA CHIỀU / CA TỐI CHẠY TỰ ĐỘNG -> ƯU TIÊN XUẤT KHO SIÊU TỐC TỪ KHO DỰ TRỮ!
+    if slot in ("TRUA", "CHIEU", "TOI") and not a.seed and not a.video_id:
         vault_row = sheets.next_buffered(slot)
         if vault_row:
             publish_from_vault(vault_row, slot, sheets, drive, bot, manual_approve=a.manual_approve)

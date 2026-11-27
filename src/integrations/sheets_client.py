@@ -158,7 +158,7 @@ class SheetsClient:
 
     def buffered_counts(self):
         """Đếm số lượng video dựng sẵn (DA_DUNG_SAN) theo từng ca."""
-        counts = {"TRUA": 0, "TOI": 0, "SANG": 0}
+        counts = {"TRUA": 0, "CHIEU": 0, "TOI": 0, "SANG": 0}
         for r in self.rows():
             if r["status"] == "DA_DUNG_SAN":
                 sl = r.get("slot") or "TRUA"

@@ -22,20 +22,19 @@ from sheets_client import SheetsClient  # noqa: E402
 from telegram_bot import TelegramBot  # noqa: E402
 
 VN = datetime.timezone(datetime.timedelta(hours=7))
-TARGET_PER_SLOT = 7  # 30 Trưa + 30 Tối = 60 video dựng sẵn (đủ phát 30 ngày liên tục)
+VAULT_SLOTS = ("TRUA", "CHIEU", "TOI")
+TARGET_PER_SLOT = 7  # 7 Trưa + 7 Chiều + 7 Tối = 21 video dựng sẵn (đủ phát tự động 7 ngày)
 
 
-def pick_needed_slot(counts):
-    """Chọn ca đang thiếu nhiều hơn để kho Trưa và Tối luôn cân bằng 1:1."""
-    trua = counts.get("TRUA", 0)
-    toi = counts.get("TOI", 0)
-    if trua >= TARGET_PER_SLOT and toi >= TARGET_PER_SLOT:
+def pick_needed_slot(counts, target=TARGET_PER_SLOT):
+    """Chọn ca đang thiếu nhiều nhất trong 3 ca Evergreen (TRUA / CHIEU / TOI) để kho luôn cân bằng 1:1:1."""
+    if all(counts.get(s, 0) >= target for s in VAULT_SLOTS):
         return None
-    return "TRUA" if trua <= toi else "TOI"
+    return min(VAULT_SLOTS, key=lambda s: counts.get(s, 0))
 
 
 def ensure_pending_row(sheets, slot, now):
-    """Lấy dòng CHO_TAO của đúng ca (TRUA/TOI); nếu hết thì tự sinh 6 chủ đề Evergreen mới."""
+    """Lấy dòng CHO_TAO của đúng ca (TRUA/CHIEU/TOI); nếu hết thì tự sinh 6 chủ đề Evergreen mới."""
     for r in sheets.rows():
         if r["status"] == "CHO_TAO" and r["slot"] == slot:
             return r
@@ -73,12 +72,11 @@ def main():
 
     for step in range(a.batch_size):
         counts = sheets.buffered_counts()
-        trua_n, toi_n = counts.get("TRUA", 0), counts.get("TOI", 0)
-        if trua_n >= a.target_per_slot and toi_n >= a.target_per_slot:
-            print(f"[buffer] Kho dự trữ 30 ngày đã đầy ({trua_n + toi_n}/{a.target_per_slot * 2} video) -> nghỉ!")
+        slot = pick_needed_slot(counts, a.target_per_slot)
+        if not slot:
+            tot = sum(counts.get(s, 0) for s in VAULT_SLOTS)
+            print(f"[buffer] Kho dự trữ đã đầy ({tot}/{a.target_per_slot * len(VAULT_SLOTS)} video) -> nghỉ!")
             break
-
-        slot = "TRUA" if trua_n <= toi_n else "TOI"
         now = datetime.datetime.now(VN)
         row = ensure_pending_row(sheets, slot, now)
         if not row:
@@ -116,20 +114,26 @@ def main():
         print(f"[buffer] Đã cất vào kho DA_DUNG_SAN: {row['id']} -> drive_id={vid} (QA={qa.get('score')}/10)")
 
     final_counts = sheets.buffered_counts()
-    total_buf = final_counts.get("TRUA", 0) + final_counts.get("TOI", 0)
-    print(f"[buffer] Hoàn tất đợt chạy: dựng thêm {len(made)} video. Tổng kho hiện tại: {total_buf}/{a.target_per_slot * 2} "
-          f"(TRUA={final_counts.get('TRUA', 0)}/{a.target_per_slot}, TOI={final_counts.get('TOI', 0)}/{a.target_per_slot})")
+    total_buf = sum(final_counts.get(s, 0) for s in VAULT_SLOTS)
+    cap_total = a.target_per_slot * len(VAULT_SLOTS)
+    print(
+        f"[buffer] Hoàn tất đợt chạy: dựng thêm {len(made)} video. Tổng kho hiện tại: {total_buf}/{cap_total} "
+        f"(TRUA={final_counts.get('TRUA', 0)}/{a.target_per_slot}, "
+        f"CHIEU={final_counts.get('CHIEU', 0)}/{a.target_per_slot}, "
+        f"TOI={final_counts.get('TOI', 0)}/{a.target_per_slot})"
+    )
 
     if a.notify and made:
         lines = "\n".join(f"• [{sl}] {tp} (QA {sc}/10)" for sl, tp, sc in made)
-        days_ready = min(final_counts.get("TRUA", 0), final_counts.get("TOI", 0))
+        days_ready = min(final_counts.get(s, 0) for s in VAULT_SLOTS)
         TelegramBot().send_text(
-            f"📦 ĐÃ NẠP THÊM {len(made)} VIDEO VÀO KHO DỰ TRỮ 30 NGÀY\n"
+            f"📦 ĐÃ NẠP THÊM {len(made)} VIDEO VÀO KHO DỰ TRỮ (4 CA/NGÀY)\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{lines}\n\n"
-            f"📊 Tồn kho dựng sẵn hiện tại: {total_buf}/{a.target_per_slot * 2} video\n"
-            f"• Ca Trưa: {final_counts.get('TRUA', 0)}/{a.target_per_slot} video\n"
-            f"• Ca Tối: {final_counts.get('TOI', 0)}/{a.target_per_slot} video\n"
+            f"📊 Tồn kho dựng sẵn hiện tại: {total_buf}/{cap_total} video\n"
+            f"• Ca Trưa (12:00): {final_counts.get('TRUA', 0)}/{a.target_per_slot} video\n"
+            f"• Ca Chiều (16:30): {final_counts.get('CHIEU', 0)}/{a.target_per_slot} video\n"
+            f"• Ca Tối (20:30): {final_counts.get('TOI', 0)}/{a.target_per_slot} video\n"
             f"✨ Đủ phát tự động liên tục trong ~{days_ready} ngày!"
         )
     return 0

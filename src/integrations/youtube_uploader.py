@@ -15,11 +15,12 @@ YT_SCOPES = [
 ]
 VN = datetime.timezone(datetime.timedelta(hours=7))
 
-# Giờ vàng phát sóng theo ca (giờ, phút) theo giờ Việt Nam UTC+7
+# Giờ vàng phát sóng 4 ca/ngày (giờ, phút) theo giờ Việt Nam UTC+7 (cách đều 4-5 tiếng)
 SLOT_SCHEDULE_VN = {
-    "SANG": (7, 0),    # đi làm/đi học, lướt điện thoại buổi sáng
-    "TRUA": (12, 0),   # nghỉ trưa
-    "TOI": (20, 0),    # khung vàng tối sau bữa cơm
+    "SANG": (7, 0),     # đi làm/đi học, lướt điện thoại buổi sáng
+    "TRUA": (12, 0),    # nghỉ trưa
+    "CHIEU": (16, 30),  # tan tầm / giải cứu việc văn phòng cuối ngày
+    "TOI": (20, 30),    # khung vàng giải trí buổi tối
 }
 
 
